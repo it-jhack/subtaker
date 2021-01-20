@@ -59,7 +59,7 @@ Subtaker will:
 - Bruteforce using your wordlist to be set previously.
 - Automatically send the txt list file back to "inscopes" folder after the scan is finished.
 - Register your scan details at log-inscopes.csv. I use tabview to quickly check it on terminal.
-- Create lists on the "subprocessing-outputs" folder with the results obtained from Amass, FDNS CNAME parsing, MassDNS, Nuclei.
+- Create lists on the "subprocessing-outputs" folder with the results obtained from Amass, FDNS CNAME parsing, MassDNS, and Nuclei.
 - Print on the terminal, create a report, and notify you on your email should it find any potential vulnerability.
 
 # Important Notice
@@ -247,4 +247,6 @@ alias massdns='/home/your_username/massdns/bin/massdns'
 
 Finally, you need to close the terminal and open it again.
 
-After this, you should be all set to run Subtaker.
+After this, you should be all set to [run Subtaker].
+
+[run subtaker]: https://github.com/it-jhack/subtaker#how-to-use-it
