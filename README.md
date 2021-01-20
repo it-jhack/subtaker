@@ -57,7 +57,7 @@ python3 /home/your_username/subtaker.py
 
 Subtaker will:
 - Bruteforce using your wordlist to be set previously.
-- Automatically send the txt list file back to "inscopes" folder after the scan is finished.
+- Automatically send the txt list file from ```to-check``` to ```done``` folder after the scan is finished.
 - Register your scan details at log-inscopes.csv. I use tabview to quickly check it on terminal.
 - Create lists on the "subprocessing-outputs" folder with the results obtained from Amass, FDNS CNAME parsing, MassDNS, and Nuclei.
 - Print on the terminal, create a report, and notify you on your email should it find any potential vulnerability.
@@ -81,10 +81,11 @@ sudo apt-get update && sudo apt-get upgrade
 
 ## Rapid7's FDNS CNAME file
 
-Save the latest [Rapid7's FDNS CNAME file] in the folder:
+Save the latest [Rapid7's FDNS CNAME file] in the folder (it has a few Gigabytes):
 ```
 /home/your_username/subtaker/fdns
 ```
+> Do NOT decompress the file
 
 Always check for updates. You need to register (for free) to have access to the most recent files. Otherwise, by using old files you may get less accurate results and more false-positives.
 
