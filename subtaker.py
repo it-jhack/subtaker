@@ -21,6 +21,7 @@
 
 
 import os
+import sys
 import subprocess
 from datetime import datetime
 import json
@@ -33,9 +34,6 @@ import inspect
 
 
 HOME = os.environ.get('HOME')
-
-RESOLVERS_DPATH = f'{HOME}/subtaker/resolvers'
-RESOLVERS_FPATH = f'{HOME}/subtaker/resolvers/resolvers.txt'
 
 
 # Environment Variables
@@ -142,8 +140,25 @@ def email_simple(title, email_body):
         msg = f'Subject: {subject}\n\n{body}'
         smtp.sendmail(EMAIL_ADDRESS, DEST_ADDRESS, msg)
 
-#!TODO def print_status():
-#!TODO def get_time():
+def get_script_dir():
+    path = os.path.realpath(sys.argv[0])
+    if os.path.isdir(path):
+        return path
+    else:
+        return os.path.dirname(path)
+
+def get_resolvers_dir():
+    return get_script_dir()+"/resolvers/" # Active/reliable DNS resolvers dir
+
+def get_resolvers_fpath():
+    return get_script_dir()+"/resolvers/resolvers.txt" # Active/reliable DNS resolvers file
+
+def get_time_hhmm():
+    return datetime.now().strftime('%H:%M')
+
+def screen_msg(message):
+    print(f'{get_time_hhmm()} {message}')
+
 
 # Cewl h4x0r b4nn3r :]
 print('''
@@ -166,25 +181,22 @@ print("\nLEGAL WARNING: DO NOT USE THIS TOOL ON WEBSITES YOU DON'T HAVE PERMISSI
 
 # 0.1 Updating resolvers
 try:
-    subprocess.run(['rm', RESOLVERS_FPATH])
+    subprocess.run(['rm', get_resolvers_fpath()])
 except FileNotFoundError:
     pass
 
-# Fresh list of periodically validated public DNS resolvers.
-subprocess.run(['wget', 'https://raw.githubusercontent.com/janmasarik/resolvers/master/resolvers.txt',
-    '-P', RESOLVERS_DPATH],
-    capture_output=True)
+try:
+    # Fresh list of periodically validated public DNS resolvers.
+    subprocess.run(['wget', 'https://raw.githubusercontent.com/janmasarik/resolvers/master/resolvers.txt',
+        '-P', get_resolvers_dir()])
 
-time_now = str(datetime.now().strftime('%H:%M'))
-print(f'{time_now} > updating resolvers: OK')
-
-
-
+    screen_msg("updated resolvers file successfully")
+except Exception:
+    screen_msg(f"resolvers file could not be updated at {get_resolvers_dir()}")
 
 
-print()
-print('> Always remember to check for FDNS file UPDATES on:')
-print(colored('  https://opendata.rapid7.com/sonar.fdns_v2/\n', 'red'))
+print('\n> Always remember to check for FDNS file UPDATES on:')
+print(colored('  https://opendata.rapid7.com/sonar.fdns_v2/\n', 'blue'))
 
 bruteforce_question = str(input('''> Bruteforce subdomains? (y/n): '''))
 
