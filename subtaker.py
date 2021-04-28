@@ -37,10 +37,11 @@ HOME = os.environ.get('HOME')
 RESOLVERS_DPATH = f'{HOME}/subtaker/resolvers'
 RESOLVERS_FPATH = f'{HOME}/subtaker/resolvers/resolvers.txt'
 
-# Environment Variables (.bashrc @ kali)
-EMAIL_ADDRESS = os.environ.get('SUBT_EMAIL_USER')
-EMAIL_PASS = os.environ.get('SUBT_EMAIL_APP_PASS')
-DEST_ADDRESS = os.environ.get('SUBT_EMAIL_RECEIVER') #this is the email that will get the notification
+
+# Environment Variables
+EMAIL_ADDRESS = os.environ.get('SUBT_EMAIL_USER') # SUBT = subtaker
+EMAIL_PASS = os.environ.get('SUBT_EMAIL_APP_PASS') # Recommended NOT to use your real password. See: youtu.be/JRCJ6RtE3xU?t=54
+DEST_ADDRESS = os.environ.get('SUBT_EMAIL_RECEIVER') # This is the email that will get the notification
 
 def lineno():
     # Returns the current line number in the code
@@ -55,7 +56,7 @@ def _exec_and_readlines(cmd, domains):
 
     return [j.decode('utf-8').strip() for j in stdout.splitlines() if j != b'\n']
 
-massdns_res_rate_str = '20' #very low rate to avoid blacklisting your IP
+massdns_res_rate_str = '500' # High resolution rate may blacklist your IP on DNS server.
 def get_massdns(domains):
     massdns_cmd = [
         f'{HOME}/massdns/bin/massdns',
@@ -75,8 +76,7 @@ def get_massdns(domains):
     
     return processed
 
-
-# Avoiding memory killed when resolving/bruteforcing millions of subdomains
+# Avoid memory killed when resolving/bruteforcing millions of subdomains
 def massdns_sliced_list(subdomains, outp_file):
     max_amount = 1_000_000
     with open(outp_file, 'a') as f:
@@ -105,7 +105,7 @@ def get_amass(domain):
     return processed
 
 def get_nuclei(domains_list, output_file):
-    #nuclei -c 10 -l $DOMAINS_LIST -t subdomain-takeover -nC -o $OUTPUT_FILE
+    #shell cmd: nuclei -c 10 -l $DOMAINS_LIST -t subdomain-takeover -nC -o $OUTPUT_FILE
     nuclei_cmd = [
         'nuclei', 
         '-c', '10', # default=10
@@ -129,14 +129,6 @@ def print_memory():
     p = subprocess.run(cmd, capture_output=True, text=True)
     print(f'\n{p.stdout}')
 
-def nvpn_connect():
-    cmd = ['nordvpn', 'connect', 'United_States']
-    p = subprocess.run(cmd)
-
-def nvpn_disconnect():
-    cmd = ['nordvpn', 'disconnect']
-    p = subprocess.run(cmd)
-
 def email_simple(title, email_body):
     with smtplib.SMTP('smtp.gmail.com', 587) as smtp:
         smtp.ehlo()
@@ -150,26 +142,11 @@ def email_simple(title, email_body):
         msg = f'Subject: {subject}\n\n{body}'
         smtp.sendmail(EMAIL_ADDRESS, DEST_ADDRESS, msg)
 
+#!TODO def print_status():
+#!TODO def get_time():
 
-
-# Cool ASCII art banner for haxor purposes :D
-print(colored('''
-    .o oOOOOOOOo                                            OOOo
-    Ob.OOOOOOOo  OOOo.      oOOo.                      .adOOOOOOO
-    OboO"""""""""""".OOo. .oOOOOOo.    OOOo.oOOOOOo.."""""""""'OO
-    OOP.oOOOOOOOOOOO "POOOOOOOOOOOo.   `"OOOOOOOOOP,OOOOOOOOOOOB'
-    `O'OOOO'     `OOOOo"OOOOOOOOOOO` .adOOOOOOOOO"oOOO'    `OOOOo
-    .OOOO'            `OOOOOOOOOOOOOOOOOOOOOOOOOO'            `OO
-    OOOOO                 '"OOOOOOOOOOOOOOOO"`                oOO
-   oOOOOOba.                .adOOOOOOOOOOba               .adOOOOo.
-  oOOOOOOOOOOOOOba.    .adOOOOOOOOOO@^OOOOOOOba.     .adOOOOOOOOOOOO
- OOOOOOOOOOOOOOOOO.OOOOOOOOOOOOOO"`  '"OOOOOOOOOOOOO.OOOOOOOOOOOOOO
- "OOOO"       "YOoOOOOMOIONODOO"`  .   '"OOROAOPOEOOOoOY"     "OOO"
-    Y           'OOOOOOOOOOOOOO: .oOOo. :OOOOOOOOOOO?'         
-                 .oO%OOOOOOOOOOo.OOOOOO.oOOOOOOOOOOOO?         
-                 oOOP"%OOOOOOOOoOOOOOOO?oOOOOO?OOOO"OOo
-                 '%o  OOOO"%OOOO%"%OOOOO"OOOOOO"OOO':
-                      `$"  `OOOO' `O"Y ' `OOOO'  o             
+# Cewl h4x0r b4nn3r :]
+print('''
 ███████╗██╗   ██╗██████╗ ████████╗ █████╗ ██╗  ██╗███████╗██████╗ 
 ██╔════╝██║   ██║██╔══██╗╚══██╔══╝██╔══██╗██║ ██╔╝██╔════╝██╔══██╗
 ███████╗██║   ██║██████╔╝   ██║   ███████║█████╔╝ █████╗  ██████╔╝
@@ -183,16 +160,17 @@ print(colored('''
  | |_) | |_| |   | | |_       | | | | | (_| | (__|   < 
  |_.__/ \__, |   |_|\__|     _| |_| |_|\__,_|\___|_|\_\ 
         |___/               |___/                      
-''', 'white'))
+''')
 
 print("\nLEGAL WARNING: DO NOT USE THIS TOOL ON WEBSITES YOU DON'T HAVE PERMISSION!\n")
 
-# 0.1 Updating resolvers path
+# 0.1 Updating resolvers
 try:
     subprocess.run(['rm', RESOLVERS_FPATH])
 except FileNotFoundError:
     pass
 
+# Fresh list of periodically validated public DNS resolvers.
 subprocess.run(['wget', 'https://raw.githubusercontent.com/janmasarik/resolvers/master/resolvers.txt',
     '-P', RESOLVERS_DPATH],
     capture_output=True)
@@ -200,35 +178,8 @@ subprocess.run(['wget', 'https://raw.githubusercontent.com/janmasarik/resolvers/
 time_now = str(datetime.now().strftime('%H:%M'))
 print(f'{time_now} > updating resolvers: OK')
 
-# --BEGIN-- Removing Resolvers from resolvers file (comment lines to ignore)
-#ntt_america returning false "NOERROR"): '129.250.35.250:53', '129.250.35.251:53'
 
-google_resolver = ['8.8.8.8', '8.8.4.4']
-ntt_america_resolver = ['129.250.35.250', '129.250.35.251']
 
-blacklisted_resolvers_list = []
-blacklisted_resolvers_list.extend(ntt_america_resolver)
-
-resolvers_list = []
-
-with open(RESOLVERS_FPATH, 'r') as f:
-    for line in f:
-        if line:
-            if line.strip('\n') not in blacklisted_resolvers_list:
-                resolvers_list.append(line.strip('\n'))
-
-with open(RESOLVERS_FPATH, 'w') as f:
-    f.write('')
-
-with open(RESOLVERS_FPATH, 'a+') as f:
-    for resolver in resolvers_list:
-        if resolver == resolvers_list[-1]:
-            f.write(f'{resolver}')
-        else:
-            f.write(f'{resolver}\n')
-
-print(f'{time_now} > {blacklisted_resolvers_list} removed from resolvers list')
-# --END-- Removing Google from resolvers file (comment lines to ignore)
 
 
 print()
@@ -241,7 +192,6 @@ if bruteforce_question == 'y':
     bruteforce_fast = str(input('''      > Use fast bruteforcing? (y/n): '''))
 else:
     bruteforce_fast = 'n/a'
-
 
 
 # 0.2 Batching multiple files
@@ -290,9 +240,7 @@ for filepath in inscope_filepaths:
 
 
 
-    # 1. Use amass to get passive data ################################################################################# 1
-    #print()
-    #nvpn_disconnect()
+    # 1. Use amass to get passive data
 
     amass_outp_list = []
 
@@ -323,15 +271,11 @@ for filepath in inscope_filepaths:
 
     print(f'      > amass output saved on:')
     print(colored(f'      {amass_outp_file}', 'blue'))
-    # When you have ex:
-    # www.starbucks.com.br 
-    # As inscope you should also add:
-    # starbucks.com.br; www.starbucks.com; starbucks.com; etc.
 
     print('\n-------------------------------------------\n')
 
             
-    # 2. Retrieve subdomains from FDNS related to inscope domains ####################################################### 2
+    # 2. Retrieve subdomains from FDNS related to inscope domains
         
     FDNS_CNAME_FPATH = f'{HOME}/subtaker/fdns/2020-10-03-1601692175-fdns_cname.json.gz'
     
@@ -448,7 +392,7 @@ for filepath in inscope_filepaths:
 
 
 
-    # 3. Generate more possibilities using Commonspeak2 wordlist ######################################################## 3
+    # 3. Generate more possibilities using Commonspeak2 wordlist
     
     if bruteforce_question == 'n':
         cs2_outp_list = []
@@ -539,11 +483,7 @@ for filepath in inscope_filepaths:
             f.write(f'{item}\n')
     #! end of TEMPORARY TEST (deletion)
 
-    # 4.1 Massdns (resolve) amass_outp_list ################################################################### 4.1
-    #! enhancement: create function for MassDNS resolution, arguments: (step_num, list_name, print_text)
-    #! Error if skipping anything
-
-    #nvpn_connect()
+    # 4.1 Massdns (resolve) amass_outp_list
     
     time_now = str(datetime.now().strftime('%H:%M'))
     print(f'{time_now} > Starting MassDNS on {len(amass_outp_list):,d} possible subdomains from Amass (passive enum) output')
@@ -579,8 +519,7 @@ for filepath in inscope_filepaths:
 
     print('\n-------------------------------------------\n')
 
-    # 4.2 Massdns (resolve) list from FDNS ################################################################### 4.2
-    #! Error if skipping anything
+    # 4.2 Massdns (resolve) list from FDNS
     
     time_now = str(datetime.now().strftime('%H:%M'))
     print(f'{time_now} > starting MassDNS on {len(fdns_outp_list):,d} possible subdomains from FDNS output')
@@ -617,7 +556,6 @@ for filepath in inscope_filepaths:
     print('\n-------------------------------------------\n')
 
     # 4.3 Massdns (resolve) list from Commonspeak2 ################################################################### 4.3
-    #! Error if skipping anything
     
     time_now = str(datetime.now().strftime('%H:%M'))
     print(f'{time_now} > starting MassDNS on {len(cs2_outp_list):,d} possible subdomains from CommonSpeak2 output')
@@ -773,7 +711,6 @@ for filepath in inscope_filepaths:
         print(colored(f'{time_now} > finished DNSGEN: {len(dnsgen_outp_list):,} possible subdomains generated', 'yellow'))
 
         dnsgen_outp_check_file = f'{HOME}/subtaker/subprocessing-outputs/3_cs2-outp(to-test-if-ok)DEL-AFTER/{ftimestamp}-dnsgen'
-
 
 
         # 6. Massdns step #5 ################################################################## 6
@@ -1198,7 +1135,7 @@ for filepath in inscope_filepaths:
                 possible_positives_ebody += f'{len(possible_positives_list)} positives found.'
             
             if possible_positives_ebody:
-                # email me
+                # email yourself
                 email_simple(f'SUBD TKO on {company_name}', possible_positives_ebody)
                 
                 # Writing report
