@@ -31,21 +31,30 @@ from termcolor import colored
 import re
 from more_itertools import unique_everseen
 import inspect
+import argparse
+
+# Argparse 
+# flags: https://docs.python.org/3/library/argparse.html?highlight=add_argument#argparse.ArgumentParser.add_argument
+parser = argparse.ArgumentParser(description='Subtaker: subdomain takeover tool.')
+
+input_group = parser.add_mutually_exclusive_group()
+input_group.add_argument('-d', type=str, metavar='<domain>', help='Provide a domain. Subtaker will look for related subdomains and try to takeover them. Usage: -d example.com')
+input_group.add_argument('-f', type=str, metavar='<file>', help='List domains in a \'.txt\' file. Each domain must be in a different line. Do not include \'http://\' or \'https://\'. Usage: -f domains.txt')
+input_group.add_argument('--dir', type=str, metavar='<path>', help='Path to a directory containing .txt files only. Each domains file will run in a different sequential scan. Usage: --dir /path/to/dir/')
+
+# Getting working directory as default for report output
+argparse_default_o = subprocess.run(['pwd'], capture_output=True, text=True).stdout.strip()
+
+parser.add_argument('-o', type=str, metavar='<dir_path>', default=argparse_default_o, help='Directory base path to output report file. Usage: -o /path/to/dir/')
+parser.add_argument('--brute', type=str, metavar='<file>', help='Bruteforce subdomains. Usage: -b bruteforcelist.txt')
+parser.add_argument('--res-rate', type=int, metavar='<number>', default=15000, help='DNS resolution rate. Default is 15,000. Please, note that high resolution rates may temporarily blacklist your IP on DNS servers. Usage: --res-rate 1000')
+parser.add_argument('--fdns', type=str, metavar='', help='Forward DNS')
+parser.add_argument('--rdns', type=str, metavar='', help='Reverse DNS')
+
+args = parser.parse_args()
 
 
-HOME = os.environ.get('HOME')
-
-
-# Environment Variables
-EMAIL_ADDRESS = os.environ.get('SUBT_EMAIL_USER') # SUBT = subtaker
-EMAIL_PASS = os.environ.get('SUBT_EMAIL_APP_PASS') # Recommended NOT to use your real password. See: youtu.be/JRCJ6RtE3xU?t=54
-DEST_ADDRESS = os.environ.get('SUBT_EMAIL_RECEIVER') # This is the email that will get the notification
-
-def lineno():
-    # Returns the current line number in the code
-    # ex.: print("hello, this is line number ", lineno())
-    return inspect.currentframe().f_back.f_lineno
-
+# Functions
 def _exec_and_readlines(cmd, domains):
 
     domains_str = bytes('\n'.join(domains), 'ascii')
@@ -54,12 +63,11 @@ def _exec_and_readlines(cmd, domains):
 
     return [j.decode('utf-8').strip() for j in stdout.splitlines() if j != b'\n']
 
-massdns_res_rate_str = '500' # High resolution rate may blacklist your IP on DNS server.
 def get_massdns(domains):
     massdns_cmd = [
         f'{HOME}/massdns/bin/massdns',
         '--quiet',
-        '-s', massdns_res_rate_str,
+        '-s', args.res_rate,
         '-t', 'A',
         '-o', 'J',
         '-r', RESOLVERS_FPATH,
@@ -111,7 +119,6 @@ def get_nuclei(domains_list, output_file):
         '-t', 'subdomain-takeover'
         '-nC', # no colors
         '-o', output_file
-
     ]
 
     processed = []
