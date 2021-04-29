@@ -33,14 +33,15 @@ from more_itertools import unique_everseen
 import inspect
 import argparse
 
+import modules.utils
+import modules.subsort
+
 # Argparse 
 # flags: https://docs.python.org/3/library/argparse.html?highlight=add_argument#argparse.ArgumentParser.add_argument
 parser = argparse.ArgumentParser(description='Subtaker: subdomain takeover tool.')
 
 input_group = parser.add_mutually_exclusive_group()
-input_group.add_argument('-d', type=str, metavar='<domain>', help='Provide a domain. Subtaker will look for related subdomains and try to takeover them. Usage: -d example.com')
 input_group.add_argument('-f', type=str, metavar='<file>', help='List domains in a \'.txt\' file. Each domain must be in a different line. Do not include \'http://\' or \'https://\'. Usage: -f domains.txt')
-input_group.add_argument('--dir', type=str, metavar='<path>', help='Path to a directory containing .txt files only. Each domains file will run in a different sequential scan. Usage: --dir /path/to/dir/')
 
 # Getting working directory as default for report output
 argparse_default_o = subprocess.run(['pwd'], capture_output=True, text=True).stdout.strip()
@@ -55,13 +56,17 @@ args = parser.parse_args()
 
 
 # Functions
-def _exec_and_readlines(cmd, domains):
 
-    domains_str = bytes('\n'.join(domains), 'ascii')
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.PIPE)
-    stdout, stderr = proc.communicate(input=domains_str)
-
-    return [j.decode('utf-8').strip() for j in stdout.splitlines() if j != b'\n']
+# Avoid memory killed when resolving millions of subdomains
+def massdns_sliced_list(subdomains, outp_file):
+    max_amount = 1_000_000
+    with open(outp_file, 'a') as f:
+        while len(subdomains) > max_amount:
+            ndjson.dump(get_massdns(subdomains[:max_amount]), f)
+            f.write('\n')
+            del subdomains[:max_amount]
+        ndjson.dump(get_massdns(subdomains), f)
+        del subdomains
 
 def get_massdns(domains):
     massdns_cmd = [
@@ -82,33 +87,6 @@ def get_massdns(domains):
     
     return processed
 
-# Avoid memory killed when resolving/bruteforcing millions of subdomains
-def massdns_sliced_list(subdomains, outp_file):
-    max_amount = 1_000_000
-    with open(outp_file, 'a') as f:
-        while len(subdomains) > max_amount:
-            ndjson.dump(get_massdns(subdomains[:max_amount]), f)
-            f.write('\n')
-            del subdomains[:max_amount]
-        ndjson.dump(get_massdns(subdomains), f)
-        del subdomains
-
-
-def get_amass(domain):
-    amass_cmd = [
-        'amass', 
-        'enum',
-        '--passive',
-        '-d', domain
-    ]
-
-    processed = []
-    for line in _exec_and_readlines(amass_cmd, domain):
-        if not line:
-            continue
-        processed.append(line)
-    
-    return processed
 
 def get_nuclei(domains_list, output_file):
     #shell cmd: nuclei -c 10 -l $DOMAINS_LIST -t subdomain-takeover -nC -o $OUTPUT_FILE
@@ -160,11 +138,7 @@ def get_resolvers_dir():
 def get_resolvers_fpath():
     return get_script_dir()+"/resolvers/resolvers.txt" # Active/reliable DNS resolvers file
 
-def get_time_hhmm():
-    return datetime.now().strftime('%H:%M')
 
-def screen_msg(message):
-    print(f'{get_time_hhmm()} {message}')
 
 
 # Cewl h4x0r b4nn3r :]
@@ -205,95 +179,25 @@ except Exception:
 print('\n> Always remember to check for FDNS file UPDATES on:')
 print(colored('  https://opendata.rapid7.com/sonar.fdns_v2/\n', 'blue'))
 
-bruteforce_question = str(input('''> Bruteforce subdomains? (y/n): '''))
+domains_list = []
 
-if bruteforce_question == 'y':
-    bruteforce_fast = str(input('''      > Use fast bruteforcing? (y/n): '''))
-else:
-    bruteforce_fast = 'n/a'
-
-
-# 0.2 Batching multiple files
-to_check_dir = f'{HOME}/subtaker/inscopes/to-check/'
-
-inscope_filenames = []
-inscope_filenames.extend(os.listdir(f'{to_check_dir}'))
-inscope_filenames.sort()
-
-inscope_filepaths = []
-for filename in inscope_filenames:
-    file_path = f'{to_check_dir}{filename}'
-    inscope_filepaths.append(file_path)
-
-
-for filepath in inscope_filepaths:
-    start_time = datetime.now()
-    inscope_file = filepath
-    time_now = str(datetime.now().strftime('%H:%M'))
-
-    ftimestamp = datetime.now().strftime('%y.%m.%d-%H.%M')
-
-    print('\n###########################################')
-    print()
-    print(f'{time_now} > Subtaker processes started on inscope file: {inscope_file}\n')
+with open(argparse.f, 'r') as domain_file:
+    for domain in domain_file:
+        domains_list.append(domain)
     
+# Deleting redundant subdomains
+domains_list = modules.subsort.del_list_subds_redund(domains_list)
 
+#! '!' means 'important!'
+#! Use Amass to get passive data on each domain
+amass_output = []
+for domain in domains_list:
+    modules.utils.screen_msg('Executing: amass enum --passive -d')
+    amass_output.extend(modules.amass_enum(domain))
 
-    # 0.3 Grabbing company's name from inscope file path
-    company_name_split_list = []
-    company_name_split_list.extend(inscope_file.split('/'))
+# Removing redundancies
+amass_output = list(unique_everseen(amass_output))
 
-
-    company_name = company_name_split_list[-1]
-    if '.txt' in company_name:
-        company_name_split_list = []
-        company_name_split_list.extend(company_name.split('.'))
-        company_name = company_name_split_list[0]
-
-
-    if '-' in company_name:
-        company_name_split_list = []
-        company_name_split_list.extend(company_name.split('-'))
-
-        company_name = company_name_split_list[0]
-
-
-
-    # 1. Use amass to get passive data
-
-    amass_outp_list = []
-
-    with open(inscope_file, 'r') as isl:
-        print('-------------------------------------------\n')
-        for line in isl:
-            if line:
-                domain = line.strip('\n')
-                time_now = str(datetime.now().strftime('%H:%M'))
-                print(f'{time_now} > subprocessing: amass enum --passive -d {domain}')
-                amass_outp_list.extend(get_amass(domain))
-    time_now = str(datetime.now().strftime('%H:%M'))
-    
-    amass_outp_list = list(unique_everseen(amass_outp_list))
-    
-    if '' in amass_outp_list:
-        amass_outp_list.remove('')
-    
-    print()
-    print(colored(f'{time_now} > amass subprocess finished: {len(amass_outp_list):,} unique subdomains retrieved', 'yellow'))
-    
-    amass_outp_file = f'{HOME}/subtaker/subprocessing-outputs/1_amass-txt-outp/{ftimestamp}-{company_name}-amass_outp.txt'
-
-    with open(amass_outp_file, 'a') as aof:
-        for subdomain in amass_outp_list:
-            aof.write(f'{subdomain}\n')
-
-
-    print(f'      > amass output saved on:')
-    print(colored(f'      {amass_outp_file}', 'blue'))
-
-    print('\n-------------------------------------------\n')
-
-            
     # 2. Retrieve subdomains from FDNS related to inscope domains
         
     FDNS_CNAME_FPATH = f'{HOME}/subtaker/fdns/2020-10-03-1601692175-fdns_cname.json.gz'
