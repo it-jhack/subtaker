@@ -1,4 +1,5 @@
 from datetime import datetime
+from more_itertools import unique_everseen
 
 def get_time_hhmm():
     return datetime.now().strftime('%H:%M')
@@ -15,3 +16,10 @@ def exec_and_readlines(cmd, domains):
     stdout, stderr = proc.communicate(input=domains_str)
 
     return [j.decode('utf-8').strip() for j in stdout.splitlines() if j != b'\n']
+
+def merge_lists(main_list, *args):
+    for arg in args:
+        main_list.extend(arg)
+        main_list = list(unique_everseen(main_list))
+    
+    return main_list

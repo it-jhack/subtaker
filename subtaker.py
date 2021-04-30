@@ -35,6 +35,7 @@ import argparse
 
 import modules.utils
 import modules.subsort
+import modules.fdns
 
 # Argparse 
 # flags: https://docs.python.org/3/library/argparse.html?highlight=add_argument#argparse.ArgumentParser.add_argument
@@ -49,8 +50,8 @@ argparse_default_o = subprocess.run(['pwd'], capture_output=True, text=True).std
 parser.add_argument('-o', type=str, metavar='<dir_path>', default=argparse_default_o, help='Directory base path to output report file. Usage: -o /path/to/dir/')
 parser.add_argument('--brute', type=str, metavar='<file>', help='Bruteforce subdomains. Usage: -b bruteforcelist.txt')
 parser.add_argument('--res-rate', type=int, metavar='<number>', default=15000, help='DNS resolution rate. Default is 15,000. Please, note that high resolution rates may temporarily blacklist your IP on DNS servers. Usage: --res-rate 1000')
-parser.add_argument('--fdns', type=str, metavar='', help='Forward DNS')
-parser.add_argument('--rdns', type=str, metavar='', help='Reverse DNS')
+parser.add_argument('--fdns', type=str, metavar='<file.json.gz>', help='Path to the file containing Forward DNS data (do NOT extract the file). See \'opendata.rapid7.com\'. Usage: --fdns cname_file.json.gz')
+# parser.add_argument('--rdns', type=str, metavar='', help='Reverse DNS') #TODO Reverse DNS query
 
 args = parser.parse_args()
 
@@ -139,8 +140,6 @@ def get_resolvers_fpath():
     return get_script_dir()+"/resolvers/resolvers.txt" # Active/reliable DNS resolvers file
 
 
-
-
 # Cewl h4x0r b4nn3r :]
 print('''
 ███████╗██╗   ██╗██████╗ ████████╗ █████╗ ██╗  ██╗███████╗██████╗ 
@@ -198,120 +197,15 @@ for domain in domains_list:
 # Removing redundancies
 amass_output = list(unique_everseen(amass_output))
 
-    # 2. Retrieve subdomains from FDNS related to inscope domains
-        
-    FDNS_CNAME_FPATH = f'{HOME}/subtaker/fdns/2020-10-03-1601692175-fdns_cname.json.gz'
+# 2. Retrieve subdomains from FDNS related to inscope domains
     
-    time_now = str(datetime.now().strftime('%H:%M'))
-    print(f'{time_now} > parsing the following FDNS file for related subdomains:')
-    print(colored(f'      {FDNS_CNAME_FPATH}', 'blue'))
+if argparse.fdns:
+    #do something with module.fdns
+    fdns_output = []
+    fdns_output.extend(modules.fdns.grep_fdns(domains_list, argparse.fdns))
 
-    grep_list = []
-    jq_regex_list = []
-
-    # Removing inscope redundancies for (fdns)grep (thus, saving considerable time!)
-    with open(inscope_file, 'r') as isf:
-        inscope_list = []
-        for line in isf:
-            inscope_list.append(line.strip('\n'))
-        
-        sorted_inscope_list = sorted(inscope_list, key=len)
-        inscope_range = len(sorted_inscope_list)
-
-        # Removing redundancies in FDNS grep parsing
-        fdns_parsing_input_list = []
-
-        for i in range(inscope_range):
-                
-            disposable_list = []
-            disposable_list.extend(sorted_inscope_list)
-            disposable_list.remove(sorted_inscope_list[i])
-            disposable_list_string = str(disposable_list)
-
-            if sorted_inscope_list[i] in disposable_list_string:
-                flag = 0
-                for item in fdns_parsing_input_list:
-                    if item in sorted_inscope_list[i]:
-                        flag += 1
-                if flag == 0:
-                    fdns_parsing_input_list.append(sorted_inscope_list[i])
-            else:
-                disposable_list_string_2 = str(fdns_parsing_input_list)
-                if sorted_inscope_list[i] not in disposable_list_string_2:
-                    flag = 0
-                    for item in fdns_parsing_input_list:
-                        if item in sorted_inscope_list[i]:
-                            flag += 1
-                    if flag == 0:
-                        fdns_parsing_input_list.append(sorted_inscope_list[i])
-
-
-    # turning inscopes into NOT regex strings for 'grep' and 'jq'
     
-    for domain in fdns_parsing_input_list:
-        scope = domain.strip()
-        sliced_scope = scope.split(".")
-
-        grep_str = '.'       
-        jq_regex_str = '\\\\.'
-        i = 1
-        for item in sliced_scope:
-            grep_str += item
-            jq_regex_str += item
-            if i < len(sliced_scope):
-                grep_str += '.'
-                jq_regex_str += '\\\\.'
-                i += 1
-        grep_list.append(grep_str)
-        jq_regex_list.append(jq_regex_str)
-
-    del fdns_parsing_input_list
-
-    fdns_outp_list = []
-
-
-    for grep_item, jq_item in zip(grep_list, jq_regex_list):
-
-        time_now = str(datetime.now().strftime('%H:%M'))
-        
-        print(f'{time_now} > FDNS parsing for: {grep_item} | {jq_item} [grep|jq]')
-
-        p = subprocess.run([f'zcat {FDNS_CNAME_FPATH}\
-        | grep -F \'{grep_item}\'\
-        | jq -crM \'if (.name | test("{jq_item}")) then .name elif (.value | test("{jq_item}")) then .value else empty end\'\
-        | sort\
-        | uniq'],
-            shell=True, capture_output=True, text=True)
-
-        fdns_outp_list.extend(p.stdout.split('\n'))
-        # grep -F = fixed strings (not regex)
-        # jq -c = compact instead of pretty-printed output; 
-        # -r = output raw strings, not JSON texts; 
-        # -M = monochrome (don't colorize JSON);
-
-    fdns_outp_list = list(unique_everseen(fdns_outp_list))
     
-    if '' in fdns_outp_list:
-        fdns_outp_list.remove('')
-
-    total_subds_fdns_parsed = len(fdns_outp_list)
-
-    # Removing subdomains in FDNS_outp that are already in amass_outp
-    fdns_outp_list = [subd for subd in fdns_outp_list if subd not in amass_outp_list]
-
-    total_subds_fdns_non_repeat = len(fdns_outp_list)
-    total_subds_fdns_diff = total_subds_fdns_parsed - total_subds_fdns_non_repeat
-
-    fdns_parsing_file = f'{HOME}/subtaker/subprocessing-outputs/2_fdns-parsing-txt-outp/{ftimestamp}-{company_name}-fdns_parsing_results.txt'
-    with open(fdns_parsing_file, 'a') as fpf:
-        for item in fdns_outp_list:
-            fpf.write(f'{item}\n')
-
-    time_now = str(datetime.now().strftime('%H:%M'))
-    print(colored(f'{time_now} > FDNS parsing finished: {len(fdns_outp_list):,} subdomains retrieved', 'yellow'))
-    print(colored(f'      > {total_subds_fdns_diff:,} excluded because already in amass outp', 'yellow'))
-
-    print('\n-------------------------------------------\n')
 
 
 
