@@ -49,7 +49,7 @@ argparse_default_o = subprocess.run(['pwd'], capture_output=True, text=True).std
 
 parser.add_argument('-o', type=str, metavar='<dir_path>', default=argparse_default_o, help='Directory base path to output report file. Usage: -o /path/to/dir/')
 parser.add_argument('--brute', type=str, metavar='<file>', help='Bruteforce subdomains. Usage: -b bruteforcelist.txt')
-parser.add_argument('--res-rate', type=int, metavar='<number>', default=15000, help='DNS resolution rate. Default is 15,000. Please, note that high resolution rates may temporarily blacklist your IP on DNS servers. Usage: --res-rate 1000')
+parser.add_argument('--concurrent', type=int, metavar='<number>', default=10000, help='Number of concurrent DNS lookups. Default is 10,000. Usage: --concurrent 5000')
 parser.add_argument('--fdns', type=str, metavar='<file.json.gz>', help='Path to the file containing Forward DNS data (do NOT extract the file). See \'opendata.rapid7.com\'. Usage: --fdns cname_file.json.gz')
 # parser.add_argument('--rdns', type=str, metavar='', help='Reverse DNS') #TODO Reverse DNS query
 
@@ -58,43 +58,12 @@ args = parser.parse_args()
 
 # Functions
 
-# Avoid memory killed when resolving millions of subdomains
-def massdns_sliced_list(subdomains, outp_file):
-    max_amount = 1_000_000
-    with open(outp_file, 'a') as f:
-        while len(subdomains) > max_amount:
-            ndjson.dump(get_massdns(subdomains[:max_amount]), f)
-            f.write('\n')
-            del subdomains[:max_amount]
-        ndjson.dump(get_massdns(subdomains), f)
-        del subdomains
-
-def get_massdns(domains):
-    massdns_cmd = [
-        f'{HOME}/massdns/bin/massdns',
-        '--quiet',
-        '-s', args.res_rate,
-        '-t', 'A',
-        '-o', 'J',
-        '-r', RESOLVERS_FPATH,
-        '--flush'
-    ]
-
-    processed = []
-    for line in _exec_and_readlines(massdns_cmd, domains):
-        if not line:
-            continue
-        processed.append(json.loads(line.strip()))
-    
-    return processed
-
-
-def get_nuclei(domains_list, output_file):
-    #shell cmd: nuclei -c 10 -l $DOMAINS_LIST -t subdomain-takeover -nC -o $OUTPUT_FILE
+def get_nuclei(grep_domains_list, output_file):
+    #shell cmd: nuclei -c 10 -l $grep_DOMAINS_LIST -t subdomain-takeover -nC -o $OUTPUT_FILE
     nuclei_cmd = [
         'nuclei', 
         '-c', '10', # default=10
-        '-l', domains_list,
+        '-l', grep_domains_list,
         '-t', 'subdomain-takeover'
         '-nC', # no colors
         '-o', output_file
@@ -159,6 +128,7 @@ print('''
 
 print("\nLEGAL WARNING: DO NOT USE THIS TOOL ON WEBSITES YOU DON'T HAVE PERMISSION!\n")
 
+
 # 0.1 Updating resolvers
 try:
     subprocess.run(['rm', get_resolvers_fpath()])
@@ -178,151 +148,95 @@ except Exception:
 print('\n> Always remember to check for FDNS file UPDATES on:')
 print(colored('  https://opendata.rapid7.com/sonar.fdns_v2/\n', 'blue'))
 
-domains_list = []
+grep_domains_list = []
 
 with open(argparse.f, 'r') as domain_file:
     for domain in domain_file:
-        domains_list.append(domain)
+        grep_domains_list.append(domain)
     
-# Deleting redundant subdomains
-domains_list = modules.subsort.del_list_subds_redund(domains_list)
+# Deleting greppable redundant main domains
+grep_domains_list = modules.subsort.del_list_subds_redund(grep_domains_list)
+
 
 #! '!' means 'important!'
 #! Use Amass to get passive data on each domain
 amass_output = []
-for domain in domains_list:
+for domain in grep_domains_list:
     modules.utils.screen_msg('Executing: amass enum --passive -d')
-    amass_output.extend(modules.amass_enum(domain))
+    amass_output.extend(list(unique_everseen(modules.amass_enum(domain))))
+
+# This list will be dns resolved
+subdomains_list = []
 
 # Removing redundancies
-subdomains_list = []
-subdomains_list = list(unique_everseen(amass_output))
+subdomains_list = amass_output
+del amass_output
 
-# 2. Retrieve subdomains from FDNS related to inscope domains
-    
+
+#! Retrieve subdomains from FDNS related to inscope domains
 if argparse.fdns:
     modules.utils.screen_msg(f'Grepping {argparse.fdns} for subdomains')
     
     fdns_output = []
-    fdns_output.extend(modules.fdns.grep_fdns(domains_list, argparse.fdns))
+    fdns_output.extend(modules.fdns.grep_fdns(grep_domains_list, argparse.fdns))
     fdns_output = list(unique_everseen(fdns_output))
     
-    modules.utils.screen_msg(f' FDNS grep ended succesfully. {len(fdns_output):,d} \
-        subdomains were found, from which {modules.utils.count_list_uniques(main_list, new_list)}')
+    modules.utils.screen_msg(f' FDNS grep ended succesfully! '
+        + f'{modules.utils.count_new_unique(subdomains_list, fdns_output):,d}'
+        + ' new subdomains discovered from a total of '
+        + f'{len(fdns_output):,d}'
+        + ' found on .json.gz file.')
+    subdomains_list = modules.utils.merge_lists(subdomains_list, fdns_output)
+    del fdns_output
 
+
+#! Bruteforce
 brute_list = []
 if argparse.brute:
     with open(argparse.brute, 'r') as brute_file:
         for line in brute_file:
-            for domain in domains_list:
+            for domain in grep_domains_list:
                 brute_list.append(line + '.' + domain)
+        
+        subdomains_list = modules.utils.merge_lists(subdomains_list, brute_list)
+        del brute_list
+                
 
-    # 4.1 Massdns (resolve) amass_outp_list
-    
-    time_now = str(datetime.now().strftime('%H:%M'))
-    print(f'{time_now} > Starting MassDNS on {len(amass_outp_list):,d} possible subdomains from Amass (passive enum) output')
-    print(f'      > output will be saved as .ndjson file')
+# #! Massdns: resolve subdomains
 
-    massdns_count_1 = len(amass_outp_list)
+# time_now = str(datetime.now().strftime('%H:%M'))
+# print(f'{time_now} > Starting MassDNS on {len(amass_outp_list):,d} possible subdomains from Amass (passive enum) output')
+# print(f'      > output will be saved as .ndjson file')
 
-    NDJ_OUTP_1 = f'{HOME}/subtaker/subprocessing-outputs/4_6_massdns_ndjson-outp/{ftimestamp}_1_{company_name}.ndjson'
+# massdns_count_1 = len(amass_outp_list)
 
-    massdns_1_time_start = datetime.now()
+# NDJ_OUTP_1 = f'{HOME}/subtaker/subprocessing-outputs/4_6_massdns_ndjson-outp/{ftimestamp}_1_{company_name}.ndjson'
 
-
-    massdns_sliced_list(amass_outp_list, NDJ_OUTP_1) # massdns resolution in sliced parts
-
-
-    massdns_1_time_end = datetime.now()
-    
-    massdns_1_time_total_sec = int((massdns_1_time_end - massdns_1_time_start).total_seconds())
-    
-    with open(NDJ_OUTP_1, 'r') as ndj:
-        ndj_line_count = 0
-        cname_count = 0
-        for line in ndj:
-            ndj_line_count += 1
-            if 'CNAME' in line:
-                cname_count += 1
-    
-    print()
-    time_now = str(datetime.now().strftime('%H:%M'))
-    print(f'{time_now} > MassDNS finished on Amass passive output:')
-    print(colored(f'      > {ndj_line_count:,d} total records retrieved', 'yellow'))
-    print(colored(f'      > {cname_count:,d} CNAME records retrieved', 'yellow'))
-
-    print('\n-------------------------------------------\n')
-
-    # 4.2 Massdns (resolve) list from FDNS
-    
-    time_now = str(datetime.now().strftime('%H:%M'))
-    print(f'{time_now} > starting MassDNS on {len(fdns_outp_list):,d} possible subdomains from FDNS output')
-    print(f'      > output will be saved as .ndjson file')
-
-    massdns_count_2 = len(fdns_outp_list)
-
-    NDJ_OUTP_2 = f'{HOME}/subtaker/subprocessing-outputs/4_6_massdns_ndjson-outp/{ftimestamp}_2_{company_name}.ndjson'
-
-    massdns_2_time_start = datetime.now()
+# massdns_1_time_start = datetime.now()
 
 
-    massdns_sliced_list(fdns_outp_list, NDJ_OUTP_2) # massdns resolution in sliced parts
+# massdns_sliced_list(amass_outp_list, NDJ_OUTP_1) # massdns resolution in sliced parts
 
 
-    massdns_2_time_end = datetime.now()
-    
-    massdns_2_time_total_sec = int((massdns_2_time_end - massdns_2_time_start).total_seconds())
-    
-    with open(NDJ_OUTP_2, 'r') as ndj:
-        ndj_line_count = 0
-        cname_count = 0
-        for line in ndj:
-            ndj_line_count += 1
-            if 'CNAME' in line:
-                cname_count += 1
-    
-    print()
-    time_now = str(datetime.now().strftime('%H:%M'))
-    print(f'{time_now} > MassDNS finished on FDNS output:')
-    print(colored(f'      > {ndj_line_count:,d} total records retrieved', 'yellow'))
-    print(colored(f'      > {cname_count:,d} CNAME records retrieved', 'yellow'))
+# massdns_1_time_end = datetime.now()
 
-    print('\n-------------------------------------------\n')
+# massdns_1_time_total_sec = int((massdns_1_time_end - massdns_1_time_start).total_seconds())
 
-    # 4.3 Massdns (resolve) list from Commonspeak2 ################################################################### 4.3
-    
-    time_now = str(datetime.now().strftime('%H:%M'))
-    print(f'{time_now} > starting MassDNS on {len(cs2_outp_list):,d} possible subdomains from CommonSpeak2 output')
-    print(f'      > output will be saved as .ndjson file')
+# with open(NDJ_OUTP_1, 'r') as ndj:
+#     ndj_line_count = 0
+#     cname_count = 0
+#     for line in ndj:
+#         ndj_line_count += 1
+#         if 'CNAME' in line:
+#             cname_count += 1
 
-    massdns_count_3 = len(cs2_outp_list)
+# print()
+# time_now = str(datetime.now().strftime('%H:%M'))
+# print(f'{time_now} > MassDNS finished on Amass passive output:')
+# print(colored(f'      > {ndj_line_count:,d} total records retrieved', 'yellow'))
+# print(colored(f'      > {cname_count:,d} CNAME records retrieved', 'yellow'))
 
-    NDJ_OUTP_3 = f'{HOME}/subtaker/subprocessing-outputs/4_6_massdns_ndjson-outp/{ftimestamp}_3_{company_name}.ndjson'
-
-    massdns_3_time_start = datetime.now()
-
-
-    massdns_sliced_list(cs2_outp_list, NDJ_OUTP_3) # massdns resolution in sliced parts
-
-
-    massdns_3_time_end = datetime.now()
-    
-    massdns_3_time_total_sec = int((massdns_3_time_end - massdns_3_time_start).total_seconds())
-    
-    with open(NDJ_OUTP_3, 'r') as ndj:
-        ndj_line_count = 0
-        cname_count = 0
-        for line in ndj:
-            ndj_line_count += 1
-            if 'CNAME' in line:
-                cname_count += 1
-    
-    time_now = str(datetime.now().strftime('%H:%M'))
-    print(f'{time_now} > MassDNS finished on CommonSpeak2 output:')
-    print(colored(f'      > {ndj_line_count:,d} total records retrieved', 'yellow'))
-    print(colored(f'      > {cname_count:,d} CNAME records retrieved', 'yellow'))
-
-    print('\n-------------------------------------------\n')
+print('\n-------------------------------------------\n')
 
     # 5. DNSGEN on active results from massdns ############################################################ 5
     
