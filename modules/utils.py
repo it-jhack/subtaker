@@ -14,6 +14,12 @@ def get_time_yymmdd_hhmm():
     return datetime.now().strftime('%y%m%d-%H%M')
 
 
+def get_time_yymmdd_hhmmss():
+    '''\'yymmdd-hhmmss format is helpful to orderly name different files that might be created within the minute'''
+    
+    return datetime.now().strftime('%y%m%d-%H%M%S')
+
+
 def screen_msg(message):
     '''Helpful to print events while running the program'''
     print(f'{get_time_hhmm()} > {message}')
@@ -40,16 +46,13 @@ def merge_lists(list1, list2, *args):
         # all elements ever seen.
 
     merged_list = []
-    merged_list.extend(list1)
-    merged_list = list(unique_everseen(merged_list))
+    merged_list.extend(list(unique_everseen(list1)))
 
-    merged_list.extend(list2)
-    merged_list = list(unique_everseen(merged_list))
+    merged_list.extend(list(unique_everseen(list2)))
 
     if args:
         for arg in args:
-            merged_list.extend(arg)
-            merged_list = list(unique_everseen(merged_list))
+            merged_list.extend(list(unique_everseen(arg)))
     
     return merged_list
 
@@ -58,3 +61,27 @@ def count_new_unique(main_list, new_list):
     '''Returns an integer count of unique elements not contained in main list'''
 
     return len(set(new_list) - set(main_list))
+
+
+def count_lines(file_path):
+    line_count = 0
+    with open(file_path, 'r') as f:
+        for line in f:
+            line_count += 1
+
+
+def write_full_output(file_path, string_output):
+    with open(file_path, 'w') as f:
+        f.write(string_output)
+
+
+def append_full_output(file_path, string_output):
+    with open(file_path, 'a') as f:
+        for line in string_output.split('\n'):
+            f.write(line + '\n')
+
+
+def append_list(file_path, list_output):
+    with open(file_path, 'a') as f:
+        for item in list_output:
+            f.write(item + '\n')

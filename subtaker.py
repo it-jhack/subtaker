@@ -47,7 +47,7 @@ input_group.add_argument('-f', type=str, metavar='<file>', help='List domains in
 # Getting working directory as default for report output
 argparse_default_o = subprocess.run(['pwd'], capture_output=True, text=True).stdout.strip()
 
-parser.add_argument('-o', type=str, metavar='<dir_path>', default=argparse_default_o, help='Directory base path to output report file. Usage: -o /path/to/dir/')
+parser.add_argument('--out-dir', type=str, metavar='<dir_path>', default=argparse_default_o, help='Directory base path to output report files. Usage: -o /path/to/dir/')
 parser.add_argument('--brute', type=str, metavar='<file>', help='Bruteforce subdomains. Usage: -b bruteforcelist.txt')
 parser.add_argument('--concurrent', type=int, metavar='<number>', default=10000, help='Number of concurrent DNS lookups. Default is 10,000. Usage: --concurrent 5000')
 parser.add_argument('--fdns', type=str, metavar='<file.json.gz>', help='Path to the file containing Forward DNS data (do NOT extract the file). See \'opendata.rapid7.com\'. Usage: --fdns cname_file.json.gz')
@@ -55,6 +55,9 @@ parser.add_argument('--fdns', type=str, metavar='<file.json.gz>', help='Path to 
 
 args = parser.parse_args()
 
+# Adding '/' to end of dir path, if not already at the end
+if argparse.out_dir[-1] != '/':
+    argparse.out_dir += '/'
 
 # Functions
 
@@ -154,7 +157,7 @@ with open(argparse.f, 'r') as domain_file:
     for domain in domain_file:
         grep_domains_list.append(domain)
     
-# Deleting greppable redundant main domains
+# Removing main domains redundant for grep
 grep_domains_list = modules.subsort.del_list_subds_redund(grep_domains_list)
 
 
@@ -168,7 +171,6 @@ for domain in grep_domains_list:
 # This list will be dns resolved
 subdomains_list = []
 
-# Removing redundancies
 subdomains_list = amass_output
 del amass_output
 
@@ -181,7 +183,7 @@ if argparse.fdns:
     fdns_output.extend(modules.fdns.grep_fdns(grep_domains_list, argparse.fdns))
     fdns_output = list(unique_everseen(fdns_output))
     
-    modules.utils.screen_msg(f' FDNS grep ended succesfully! '
+    modules.utils.screen_msg(f'FDNS grep ended succesfully! '
         + f'{modules.utils.count_new_unique(subdomains_list, fdns_output):,d}'
         + ' new subdomains discovered from a total of '
         + f'{len(fdns_output):,d}'
@@ -193,6 +195,8 @@ if argparse.fdns:
 #! Bruteforce
 brute_list = []
 if argparse.brute:
+    modules.utils.screen_msg(f'Subdomain brute-forcing using list file: {argparse.brute}')
+    
     with open(argparse.brute, 'r') as brute_file:
         for line in brute_file:
             for domain in grep_domains_list:
@@ -202,282 +206,38 @@ if argparse.brute:
         del brute_list
                 
 
-# #! Massdns: resolve subdomains
+#! Massdns: resolve subdomains
 
-# time_now = str(datetime.now().strftime('%H:%M'))
-# print(f'{time_now} > Starting MassDNS on {len(amass_outp_list):,d} possible subdomains from Amass (passive enum) output')
-# print(f'      > output will be saved as .ndjson file')
+modules.utils.screen_msg(f'Starting MassDNS on {len(subdomains_list):,d} possible subdomains'
+    + f' with {argparse.concurrent:,d} concurrent DNS lookups.')
 
-# massdns_count_1 = len(amass_outp_list)
+# Exec massdns
+output = get_massdns(subdomains_list, get_resolvers_fpath(), argparse.concurrent)
 
-# NDJ_OUTP_1 = f'{HOME}/subtaker/subprocessing-outputs/4_6_massdns_ndjson-outp/{ftimestamp}_1_{company_name}.ndjson'
+del subdomains_list
 
-# massdns_1_time_start = datetime.now()
+# write massdns resolution .ndjson output file
+massdns_ndjson_output_file = f'{argparse.out_dir}{modules.utils.get_time_yymmdd_hhmmss()}-massdns.ndjson'
 
+modules.utils.write_full_output(massdns_ndjson_output_file, output)
 
-# massdns_sliced_list(amass_outp_list, NDJ_OUTP_1) # massdns resolution in sliced parts
+del output
 
+# Stats
+line_count = modules.utils.count_lines(massdns_ndjson_output_file)
 
-# massdns_1_time_end = datetime.now()
+cname_count = subprocess.run(['grep', '-c', 'CNAME', massdns_ndjson_output_file],
+    capture_output=True)
 
-# massdns_1_time_total_sec = int((massdns_1_time_end - massdns_1_time_start).total_seconds())
+mx_count = subprocess.run(['grep', '-c', 'MX', massdns_ndjson_output_file],
+    capture_output=True)
 
-# with open(NDJ_OUTP_1, 'r') as ndj:
-#     ndj_line_count = 0
-#     cname_count = 0
-#     for line in ndj:
-#         ndj_line_count += 1
-#         if 'CNAME' in line:
-#             cname_count += 1
+modules.utils.screen_msg('MassDNS finished!\n'
+    + f'\t{line_count:,d} total records retrieved\n'
+    + f'\t{cname_count:,d} CNAME records\n'
+    + f'\t{mx_count:,d} MX records'
 
-# print()
-# time_now = str(datetime.now().strftime('%H:%M'))
-# print(f'{time_now} > MassDNS finished on Amass passive output:')
-# print(colored(f'      > {ndj_line_count:,d} total records retrieved', 'yellow'))
-# print(colored(f'      > {cname_count:,d} CNAME records retrieved', 'yellow'))
 
-print('\n-------------------------------------------\n')
-
-    # 5. DNSGEN on active results from massdns ############################################################ 5
-    
-    if bruteforce_question == 'n': #! enhancement: create function for resolution_rate calculation
-        dnsgen_outp_list = []
-
-        massdns_count_total = massdns_count_1 + massdns_count_2 + massdns_count_3
-
-        massdns_time_total_sec = massdns_1_time_total_sec + massdns_2_time_total_sec + massdns_3_time_total_sec
-
-        # Avoiding division by zero error
-        if massdns_time_total_sec == 0:
-            massdns_time_total_sec = 1
-
-        massdns_time_total_min = massdns_time_total_sec / 60
-
-        massdns_res_rate_sec = massdns_count_total / massdns_time_total_sec
-        massdns_res_rate_min = massdns_count_total / massdns_time_total_min
-
-        all_massdns_res_rate_sec = int(massdns_res_rate_sec)
-        all_massdns_res_rate_min = int(massdns_res_rate_min)
-        print(colored(f'      > massdns resolution rate = {all_massdns_res_rate_sec:,d} / second', 'green'))
-        print(colored(f'                                = {all_massdns_res_rate_min:,d} / minute', 'green'))
-
-        time_now = str(datetime.now().strftime('%H:%M'))
-        print(f'{time_now} > Bruteforce step: DNSGEN wordlist generation skipped')
-
-        print('\n-------------------------------------------\n')
-
-    else:
-    
-        time_now = str(datetime.now().strftime('%H:%M'))
-        print(f'{time_now} > starting DNSGEN on .ndjson file')
-
-        dnsgen_list_for_input_file_creation = []
-
-        try: #! enhancement: make function
-            p = subprocess.run([f'grep CNAME {NDJ_OUTP_1}\
-                | jq -crM \'.data | .answers | .[] | if .type == "CNAME" then .name else empty end\'\
-                | sort\
-                | uniq'],
-                    shell=True, capture_output=True, text=True)
-
-            dnsgen_list_for_input_file_creation.extend(p.stdout.split('\n'))
-
-        except Exception as e:
-            print(e)
-            continue
-        
-        try: #! enhancement: make function
-            p = subprocess.run([f'grep CNAME {NDJ_OUTP_2}\
-                | jq -crM \'.data | .answers | .[] | if .type == "CNAME" then .name else empty end\'\
-                | sort\
-                | uniq'],
-                    shell=True, capture_output=True, text=True)
-
-            dnsgen_list_for_input_file_creation.extend(p.stdout.split('\n'))
-
-        except Exception as e:
-            print(e)
-            continue
-
-        try: #! enhancement: make function
-            p = subprocess.run([f'grep CNAME {NDJ_OUTP_3}\
-                | jq -crM \'.data | .answers | .[] | if .type == "CNAME" then .name else empty end\'\
-                | sort\
-                | uniq'],
-                    shell=True, capture_output=True, text=True)
-
-            dnsgen_list_for_input_file_creation.extend(p.stdout.split('\n'))
-
-        except Exception as e:
-            print(e)
-            continue
-        
-        dnsgen_list_for_input_file_creation = list(unique_everseen(dnsgen_list_for_input_file_creation))
-
-        if '' in dnsgen_list_for_input_file_creation:
-            dnsgen_list_for_input_file_creation.remove('')
-
-        input_for_dnsgen_subproc_file = f'{HOME}/subtaker/subprocessing-outputs/5_txt-inputs-for-dnsgen/{ftimestamp}-input_for_dnsgen-{company_name}.txt' #DELETE THIS FILE AFTER CHECK IF OUTPUT OK
-
-        with open(input_for_dnsgen_subproc_file, 'a') as ifd:
-            for item in dnsgen_list_for_input_file_creation:
-                ifd.write(f'{item}\n')
-
-        del dnsgen_list_for_input_file_creation #! important massive list to delete and clear RAM
-
-        dnsgen_outp_list = []
-
-        dnsgen_inputf_line_count = 0
-        with open(input_for_dnsgen_subproc_file, 'r') as f:
-            for line in f:
-                dnsgen_inputf_line_count += 1
-
-        if dnsgen_inputf_line_count >= 500: #if bruteforce_fast == 'y':
-            time_now = str(datetime.now().strftime('%H:%M')) #! delete
-            print(colored(f'{time_now} > running dnsgen --fast', 'yellow')) #! delete
-            p = subprocess.run([f'dnsgen --fast {input_for_dnsgen_subproc_file}'],
-                shell=True, capture_output=True, text=True)
-            
-            dnsgen_outp_list.extend(p.stdout.split('\n'))
-        else:
-            time_now = str(datetime.now().strftime('%H:%M')) #! delete
-            print(colored(f'{time_now} > running dnsgen', 'yellow')) #! delete            
-            p = subprocess.run([f'dnsgen {input_for_dnsgen_subproc_file}'],
-                shell=True, capture_output=True, text=True)
-            
-            dnsgen_outp_list.extend(p.stdout.split('\n'))
-
-        time_now = str(datetime.now().strftime('%H:%M')) #! delete
-        print(colored(f'{time_now} > excluding repetitions', 'yellow')) #! delete
-
-        dnsgen_outp_list = list(unique_everseen(dnsgen_outp_list))
-
-        if '' in dnsgen_outp_list:
-            dnsgen_outp_list.remove('')
-
-        time_now = str(datetime.now().strftime('%H:%M'))
-        print(colored(f'{time_now} > finished DNSGEN: {len(dnsgen_outp_list):,} possible subdomains generated', 'yellow'))
-
-        dnsgen_outp_check_file = f'{HOME}/subtaker/subprocessing-outputs/3_cs2-outp(to-test-if-ok)DEL-AFTER/{ftimestamp}-dnsgen'
-
-
-        # 6. Massdns step #5 ################################################################## 6
-        #! enhancement: create function for MassDNS resolution (same as 4.1)
-        
-        time_now = str(datetime.now().strftime('%H:%M'))
-        print(f'{time_now} > starting MassDNS on {len(dnsgen_outp_list):,d} possible subdomains from DNSGEN')
-        print(f'{time_now} > output will be saved as .ndjson file')
-
-        massdns_count_5 = len(dnsgen_outp_list)
-       
-        NDJ_OUTP_5 = f'{HOME}/subtaker/subprocessing-outputs/4_6_massdns_ndjson-outp/{ftimestamp}_5_{company_name}.ndjson'
-
-        massdns_5_time_start = datetime.now()
-
-
-        massdns_sliced_list(dnsgen_outp_list, NDJ_OUTP_5) # massdns resolution in sliced parts
-        
-
-        massdns_5_time_end = datetime.now()
-    
-        massdns_5_time_total_sec = int((massdns_5_time_end - massdns_5_time_start).total_seconds())
-        
-        #! Error if skipping anything
-        massdns_time_total_sec = massdns_1_time_total_sec + massdns_2_time_total_sec + massdns_3_time_total_sec + massdns_5_time_total_sec
-
-        #! Error if skipping anything
-        massdns_count_total = massdns_count_1 + massdns_count_2 + massdns_count_3 + massdns_count_5
-
-        # Avoiding division by zero error
-        if massdns_time_total_sec == 0:
-            massdns_time_total_sec = 1
-
-        massdns_time_total_min = massdns_time_total_sec / 60
-
-        massdns_res_rate_sec = massdns_count_total / massdns_time_total_sec
-        massdns_res_rate_min = massdns_count_total / massdns_time_total_min
-
-        all_massdns_res_rate_sec = int(massdns_res_rate_sec)
-        all_massdns_res_rate_min = int(massdns_res_rate_min)
-        print(colored(f'      > massdns resolution rate = {all_massdns_res_rate_sec:,d} / second', 'green'))
-        print(colored(f'                                = {all_massdns_res_rate_min:,d} / minute', 'green'))
-
-        with open(NDJ_OUTP_5, 'r') as ndj:
-            ndj_line_count = 0
-            cname_count = 0
-            for line in ndj:
-                ndj_line_count += 1
-                if 'CNAME' in line:
-                    cname_count += 1
-
-        print()
-        time_now = str(datetime.now().strftime('%H:%M'))
-        print(f'{time_now} > MassDNS finished on DSNGEN output:')
-        print(colored(f'      > {ndj_line_count:,d} total records retrieved', 'yellow'))
-        print(colored(f'      > {cname_count:,d} CNAME records retrieved', 'yellow'))
-
-        print('\n-------------------------------------------\n')
-
-
-
-    # 7. Merging .ndjson from steps #1 #2 #3 and #5
-    # + Generating subdomains file for Nuclei
-    
-    time_now = str(datetime.now().strftime('%H:%M'))
-    print(f'{time_now} > parsing generated .ndjson file(s) and merging them to serve as input for Nuclei\n')
-
-    input_for_httpx_file = f'{HOME}/subtaker/subprocessing-outputs/7_a_inputs-for-httpx/{ftimestamp}-{company_name}-input_for_httpx.txt'
-
-    #! enhancement: make function
-    # each cname on this list will be verified if already in company all discovered cnames
-    # if cname not already in file (that is, if really new) then it is appended to file
-    cnames_all_found_list = []
-
-    del p
-    p = subprocess.run([f'grep CNAME {NDJ_OUTP_1}\
-        | jq -crM \'.data | .answers | .[] | if .type == "CNAME" then .name else empty end\'\
-        | sort\
-        | uniq'],
-        shell=True, capture_output=True, text=True)
-
-    if p.stdout:
-        cnames_all_found_list.extend(p.stdout.split('\n'))
-        with open(input_for_httpx_file, 'a') as f:
-            f.write(p.stdout) # no need for "f.write('\n')" anywhere (TESTED!)
-
-    del p
-    p = subprocess.run([f'grep CNAME {NDJ_OUTP_2}\
-        | jq -crM \'.data | .answers | .[] | if .type == "CNAME" then .name else empty end\'\
-        | sort\
-        | uniq'],
-        shell=True, capture_output=True, text=True)
-
-    if p.stdout:
-        cnames_all_found_list.extend(p.stdout.split('\n'))
-        with open(input_for_httpx_file, 'a') as f:
-            f.write(p.stdout) # no need for "f.write('\n')" anywhere (TESTED!)
-
-    del p
-    p = subprocess.run([f'grep CNAME {NDJ_OUTP_3}\
-        | jq -crM \'.data | .answers | .[] | if .type == "CNAME" then .name else empty end\'\
-        | sort\
-        | uniq'],
-        shell=True, capture_output=True, text=True)
-
-    cnames_bruteforced_list = [] #! working on:
-
-    if p.stdout:
-        cnames_bruteforced_list += [cname for cname in p.stdout.split('\n') if cname not in cnames_all_found_list]
-        cnames_all_found_list.extend(p.stdout.split('\n'))
-        with open(input_for_httpx_file, 'a') as f:
-            f.write(p.stdout) # no need for "f.write('\n')" anywhere (TESTED!)
-
-    del p
-    p = subprocess.run([f'grep CNAME {NDJ_OUTP_5}\
-        | jq -crM \'.data | .answers | .[] | if .type == "CNAME" then .name else empty end\'\
-        | sort\
-        | uniq'],
-        shell=True, capture_output=True, text=True)
 
     if p.stdout:
         cnames_bruteforced_list += [cname for cname in p.stdout.split('\n') if cname not in cnames_all_found_list]
