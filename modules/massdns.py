@@ -1,9 +1,24 @@
-import utils
+import json
+import ndjson
+import os
+import subprocess
 
-def get_massdns(domains_list, resolvers_f, concurrent_n):
+
+def _exec_and_readlines(cmd, domains):
+    '''Executes a command, having a list of domains or subdomains as argument'''
+
+    domains_str = bytes('\n'.join(domains), 'ascii')
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.PIPE)
+    stdout, stderr = proc.communicate(input=domains_str)
+
+    return [j.decode('utf-8').strip() for j in stdout.splitlines() if j != b'\n']
+
+
+def get_massdns(subdomains_l, resolvers_f, concurrent_n):
+    
     massdns_cmd = [
-        f'massdns',
-        '-s', concurrent_n,
+        os.environ['massdns'],
+        '-s', str(concurrent_n),
         '-t', 'A',
         '-o', 'J',
         '-r', resolvers_f,
@@ -20,9 +35,14 @@ def get_massdns(domains_list, resolvers_f, concurrent_n):
     # --flush: Forces the data to be written out whenever a response is received.
 
     processed = []
-    for line in utils.exec_and_readlines(massdns_cmd, domains):
+    for line in _exec_and_readlines(massdns_cmd, subdomains_l):
         if not line:
             continue
         processed.append(json.loads(line.strip()))
     
     return processed
+
+
+def massdns_dump(subdomains_l, resolvers_f, concurrent_n, output_f):
+    with open(output_f, 'a') as f:
+        ndjson.dump(get_massdns(subdomains_l, resolvers_f, concurrent_n), f)
