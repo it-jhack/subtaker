@@ -37,6 +37,8 @@ def merge_lists(list1, list2, *args):
         # all elements ever seen.
 
     merged_list = []
+    # Extending already unique items to prevent large lists from
+        # killing process due to lack of memory.
     merged_list.extend(list(unique_everseen(list1)))
 
     merged_list.extend(list(unique_everseen(list2)))
@@ -45,7 +47,17 @@ def merge_lists(list1, list2, *args):
         for arg in args:
             merged_list.extend(list(unique_everseen(arg)))
     
+    # Remove possible duplicates resulted from intersection between lists
+    merged_list = list(unique_everseen(merged_list))
+
     return merged_list
+
+
+def append_list_file(list, file):
+    '''Append items from a list to the end of a file in separate lines. If file does not exist, it is created.'''
+    with open(file, 'a') as f:
+        for item in list:
+            f.write(item + '\n')
 
 
 def count_new_unique(main_list, new_list):
@@ -55,63 +67,12 @@ def count_new_unique(main_list, new_list):
 
 
 def count_lines(file_path):
+    '''Returns how many lines there are in a given file.
+    It is assumed that the last line is blank, so not included in the count.'''
+
     line_count = 0
     with open(file_path, 'r') as f:
         for line in f:
             line_count += 1
 
-
-def write_full_output(file_path, string_output):
-    with open(file_path, 'w') as f:
-        f.write(str(string_output))
-
-
-def write_list(file_path, string_output):
-    with open(file_path, 'w') as f:
-        f.write(string_output)
-
-
-def append_full_output(file_path, string_output):
-    with open(file_path, 'a') as f:
-        for line in string_output.split('\n'):
-            f.write(line + '\n')
-
-
-def append_list(file_path, list_output):
-    with open(file_path, 'a') as f:
-        for item in list_output:
-            f.write(item + '\n')
-
-
-def get_ndjson_jq(file_path):
-    p = subprocess.run([f'grep NOERROR {NDJ_OUTP_1}\
-    | jq -crM \'.data | .answers | .[] | .name\'\
-    | sort\
-    | uniq'],
-        shell=True, capture_output=True, text=True)
-
-
-def get_jq(jq_filter, file_path):
-    # Reusing the same 'p' var to save memory on large outputs
-    p = subprocess.run(['grep', 'NOERROR', file_path], capture_output=True)
-
-    p = subprocess.run([
-        'jq', '-crM', jq_filter 
-            # Returns 'bytes' type
-            # -c: compact instead of pretty-printed output;
-            # -r: output raw strings, not JSON texts;
-            # -M: monochrome (don't colorize JSON);
-    ],
-    capture_output=True, input=p.stdout)
-
-    p = subprocess.run(['sort'], capture_output=True, input=p.stdout)
-    p = subprocess.run(['uniq'], capture_output=True, input=p.stdout)
-
-    p = str(p.stdout).strip('b\'')
-    
-    results_l = []
-
-    results_l.extend(p.split('\\n'))
-    results_l.remove('') # remove any empty element left on list
-
-    return results_l
+    return line_count

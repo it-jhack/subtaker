@@ -17,19 +17,16 @@
 import os
 import sys
 import subprocess
-from datetime import datetime
-import json
-import ndjson
-import smtplib
 from termcolor import colored
-import re
 from more_itertools import unique_everseen
-import inspect
 import argparse
 
-import modules.utils
-import modules.subsort
+import modules.amass_enum
 import modules.fdns
+import modules.massdns
+import modules.subsort
+import modules.takeover
+import modules.utils
 
 
 # Argparse 
@@ -37,20 +34,31 @@ import modules.fdns
 parser = argparse.ArgumentParser(description='Subtaker: subdomain takeover tool.')
 
 input_group = parser.add_mutually_exclusive_group()
-input_group.add_argument('-f', type=str, metavar='<file>', help='List domains in a \'.txt\' file. Each domain must be in a different line. Do not include \'http://\' or \'https://\'. Usage: -f domains.txt')
+input_group.add_argument('-f', type=str, metavar='<file>', 
+    help='List domains in a \'.txt\' file. Each domain must be in a different line. Do not include \'http://\' or \'https://\'. Usage: -f domains.txt')
 
-# Getting working directory as default for report output
+# Getting working directory as default for report output path
 argparse_default_o = subprocess.run(['pwd'], capture_output=True, text=True).stdout.strip()
+parser.add_argument('--out-dir', type=str, metavar='<dir_path>', default=argparse_default_o,
+    help='Directory base path to output report files. Usage: -o /path/to/dir/')
 
-parser.add_argument('--out-dir', type=str, metavar='<dir_path>', default=argparse_default_o, help='Directory base path to output report files. Usage: -o /path/to/dir/')
-parser.add_argument('--brute', type=str, metavar='<file>', help='Bruteforce subdomains. Usage: -b bruteforcelist.txt')
-parser.add_argument('--concurrent', type=int, metavar='<number>', default=10000, help='Number of concurrent DNS lookups. Default is 10,000. Usage: --concurrent 5000')
-parser.add_argument('--fdns', type=str, metavar='<file.json.gz>', help='Path to the file containing Forward DNS data (do NOT extract the file). See \'opendata.rapid7.com\'. Usage: --fdns cname_file.json.gz')
-# parser.add_argument('--rdns', type=str, metavar='', help='Reverse DNS') #TODO Reverse DNS query
+parser.add_argument('--amass-enum', actions='store_true',
+    help='Do subdomain enumeration with amass')
+
+parser.add_argument('--brute', type=str, metavar='<file>',
+    help='Bruteforce subdomains. Usage: -b bruteforcelist.txt')
+
+parser.add_argument('--concurrent', type=int, metavar='<number>', default=10000,
+    help='Number of concurrent DNS lookups. Default is 10,000. Usage: --concurrent 5000')
+
+parser.add_argument('--fdns', type=str, metavar='<file.json.gz>',
+    help='Path to the file containing Forward DNS data (do NOT extract the file). See \'opendata.rapid7.com\'. Usage: --fdns cname_file.json.gz')
+
+#TODO parser.add_argument('--rdns', type=str, metavar='', help='Reverse DNS') #TODO Reverse DNS query
 
 args = parser.parse_args()
 
-# Adding '/' to end of dir path, if not already at the end
+# Adding '/' to end of argparse.out_dir path, if not already at the end
 if argparse.out_dir[-1] != '/':
     argparse.out_dir += '/'
 
@@ -91,8 +99,9 @@ print("\nLEGAL WARNING: DO NOT USE THIS TOOL ON WEBSITES YOU DON'T HAVE PERMISSI
 
 
 # 0.1 Updating resolvers
+resolvers_f = get_resolvers_fpath()
 try:
-    subprocess.run(['rm', get_resolvers_fpath()])
+    subprocess.run(['rm', resolvers_f])
 except FileNotFoundError:
     pass
 
@@ -109,28 +118,37 @@ except Exception:
 print('\n> Always remember to check for FDNS file UPDATES on:')
 print(colored('  https://opendata.rapid7.com/sonar.fdns_v2/\n', 'blue'))
 
+
+# Timestamp for file names
+ftimestamp = modules.utils.get_time_yymmdd_hhmmss()
+
+# Base file path
+base_filepath = f'{argparse.out_dir}{ftimestamp}'
+
+
+# Main domains to grep subdomains from
 grep_domains_list = []
 
 with open(argparse.f, 'r') as domain_file:
     for domain in domain_file:
         grep_domains_list.append(domain)
     
-# Removing main domains redundant for grep
+# Removing main domains that are redundant for grep
 grep_domains_list = modules.subsort.del_list_subds_redund(grep_domains_list)
 
-
-#! '!' means 'important!'
-#! Use Amass to get passive data on each domain
-amass_output = []
-for domain in grep_domains_list:
-    modules.utils.screen_msg('Executing: amass enum --passive -d')
-    amass_output.extend(list(unique_everseen(modules.amass_enum(domain))))
 
 # This list will be dns resolved
 subdomains_list = []
 
-subdomains_list = amass_output
-del amass_output
+#! '!' means 'important step'
+#! Use Amass to get passive data on each domain
+
+if argparse.amass_enum:
+    for domain in grep_domains_list:
+        modules.utils.screen_msg('Executing: amass enum --passive -d')
+        subdomains_list.extend(list(unique_everseen(modules.amass_enum(domain))))
+
+    subdomains_list = list(unique_everseen(subdomains_list))
 
 
 #! Retrieve subdomains from FDNS related to inscope domains
@@ -138,7 +156,7 @@ if argparse.fdns:
     modules.utils.screen_msg(f'Grepping {argparse.fdns} for subdomains')
     
     fdns_output = []
-    fdns_output.extend(modules.fdns.grep_fdns(grep_domains_list, argparse.fdns))
+    fdns_output.extend(modules.fdns.grep_subds_fdns(grep_domains_list, argparse.fdns))
     fdns_output = list(unique_everseen(fdns_output))
     
     modules.utils.screen_msg(f'FDNS grep ended succesfully! '
@@ -146,14 +164,18 @@ if argparse.fdns:
         + ' new subdomains discovered from a total of '
         + f'{len(fdns_output):,d}'
         + ' found on .json.gz file.')
+    
     subdomains_list = modules.utils.merge_lists(subdomains_list, fdns_output)
+    
     del fdns_output
 
 
 #! Bruteforce
-brute_list = []
 if argparse.brute:
-    modules.utils.screen_msg(f'Subdomain brute-forcing using list file: {argparse.brute}')
+    
+    brute_list = []
+
+    modules.utils.screen_msg(f'Subdomain brute-forcing using wordlist file: {argparse.brute}')
     
     with open(argparse.brute, 'r') as brute_file:
         for line in brute_file:
@@ -161,6 +183,7 @@ if argparse.brute:
                 brute_list.append(line + '.' + domain)
         
         subdomains_list = modules.utils.merge_lists(subdomains_list, brute_list)
+        
         del brute_list
                 
 
@@ -169,20 +192,26 @@ if argparse.brute:
 modules.utils.screen_msg(f'Starting MassDNS on {len(subdomains_list):,d} possible subdomains'
     + f' with {argparse.concurrent:,d} concurrent DNS lookups.')
 
-# Exec massdns
-output = get_massdns(subdomains_list, get_resolvers_fpath(), argparse.concurrent)
+
+# massdns output files path
+massdns_ndjson_outpf = f'{argparse.out_dir}{ftimestamp}-massdns.ndjson'
+massdns_txt_subds_outpf = f'{argparse.out_dir}{ftimestamp}-massdns-subds.txt'
+
+
+# Exec massdns and dump results on output file
+utils.massdns_dump(subdomains_list, resolvers_f, argparse.concurrent, massdns_ndjson_outpf)
 
 del subdomains_list
 
-# write massdns resolution .ndjson output file
-massdns_ndjson_output_file = f'{argparse.out_dir}{modules.utils.get_time_yymmdd_hhmmss()}-massdns.ndjson'
+# Writing massdns simplified subdomains txt file
+massdns_txt_subds_l = [] # l == list
+massdns_txt_subds_l.extend(modules.massdns.grep_subds_ndjson(massdns_ndjson_outpf))
 
-modules.utils.write_full_output(massdns_ndjson_output_file, output)
+modules.utils.append_list_file(massdns_txt_subds_l, massdns_txt_subds_outpf)
 
-del output
 
 # Stats
-line_count = modules.utils.count_lines(massdns_ndjson_output_file)
+line_count = modules.utils.count_lines(massdns_ndjson_outpf)
 
 cname_count = subprocess.run(['grep', '-c', 'CNAME', massdns_ndjson_output_file],
     capture_output=True)
@@ -193,4 +222,25 @@ mx_count = subprocess.run(['grep', '-c', 'MX', massdns_ndjson_output_file],
 modules.utils.screen_msg('MassDNS finished!\n'
     + f'\t{line_count:,d} total records retrieved\n'
     + f'\t{cname_count:,d} CNAME records\n'
-    + f'\t{mx_count:,d} MX records'
+    + f'\t{mx_count:,d} MX records')
+
+
+#! Takeover: 
+    # Httprobe requests subdomains list and returns urls
+    # Nuclei checks urls for 'takeovers' yaml templates
+
+# First, update Nuclei templates
+modules.takeover.update_nuclei_templates()
+
+# Nuclei output file path
+nuclei_outpf = f'{argparse.out_dir}{ftimestamp}-possible-takeovers.txt'
+
+
+# Then, run
+modules.takeover.get_nuclei(massdns_txt_subds_outpf,
+    nuclei_outpf,
+    resolvers_f)
+
+modules.utils.screen_msg('Subtaker scan finished!\n'
+    + f'\t Reports base file: {base_filepath}')
+

@@ -25,17 +25,21 @@ def update_nuclei_templates():
 
 
 def get_nuclei(subdomains_file, output_path, resolvers):
+    
+    httprobe_urls = get_httprobe(subdomains_file)
+
     nuclei_cmd = [
         'nuclei',
         '-t', 'takeovers',
         '-no-color',
-        '-o', output_path,
+        '-o', output_path, # writes file
         '-r', resolvers,
-        '-rate-limit', 150,
-        'silent',
+        '-rate-limit', 150, # default = 150
+        '-silent',
     ]
-
-    httprobe_urls = get_httprobe(subdomains_file)
+    
     nuclei_p = subprocess.run(nuclei_cmd, capture_output=True, input=httprobe_urls)
 
+    # Already writes file (-o cmd option)
+    # returning stdout in case of print() intended
     return nuclei_p.stdout
