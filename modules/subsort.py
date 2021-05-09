@@ -15,12 +15,6 @@ optimized list, which can later be used at a parsing cmd tool
 such as grep.
 '''
 
-import argparse
-
-parser = argparse.ArgumentParser(description='Remove redundancies returning an optimized list')
-parser.add_argument('-f','--file', help='txt file path with the subdomains list')
-args = parser.parse_args()
-
 
 def subds_occurrence_logic_check(subds_list):
     sorted_subds_list = sorted(subds_list, key=len)
@@ -62,6 +56,13 @@ def subds_occurrence_logic_check(subds_list):
     # returning elements in alphabetical order.
     sorted_optimized_list = []
     sorted_optimized_list.extend(sorted(optimized_list, key=len))
+    #!TODO BEGIN DEL TEST
+    base_filepath = '/home/it-jhack/Downloads/2delete/temp_backup/'
+    test_file = f'{base_filepath}-test_subsort-sorted_optimized_list-append_list' # change test_file
+    with open(test_file, 'a') as f:
+        for item in sorted_optimized_list: # change list name
+            f.write(item + '\n')
+    #!TODO END DEL TEST
     return sorted_optimized_list
 
 
