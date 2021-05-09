@@ -53,6 +53,16 @@ def merge_lists(list1, list2, *args):
     return merged_list
 
 
+def exec_and_readlines(cmd, domains):
+    '''Executes a command, having a (sub)domains list as argument'''
+
+    domains_str = bytes('\n'.join(domains), 'ascii')
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.PIPE)
+    stdout, stderr = proc.communicate(input=domains_str)
+
+    return [j.decode('utf-8').strip() for j in stdout.splitlines() if j != b'\n']
+
+
 def append_list_file(list, file):
     '''Append items from a list to the end of a file in separate lines. If file does not exist, it is created.'''
     with open(file, 'a') as f:

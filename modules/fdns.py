@@ -1,6 +1,6 @@
 
 import subprocess
-import utils
+import modules.utils
 
 
 # Converts subdomain text in order to be parsed by grep and jq commands

@@ -1,5 +1,5 @@
  
-import utils
+import modules.utils
 import subprocess
 from more_itertools import unique_everseen
 
@@ -12,17 +12,17 @@ def run_amass_enum(domain):
         '--passive',
         '-d', domain
     ]
-    output = []
-    for line in utils.exec_and_readlines(amass_cmd, domain):
+    output_list = []
+    for line in modules.utils.exec_and_readlines(amass_cmd, domain):
         if not line:
             continue
-        processed.append(line)
+        output_list.append(line)
     
     # Removing domain repetitions
-    output = list(unique_everseen(output))
+    output_list = list(unique_everseen(output_list))
 
     # Removing empty element from list
-    if '' in output:
-        output.remove('')
+    if '' in output_list:
+        output_list.remove('')
 
-    return output
+    return output_list

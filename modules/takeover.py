@@ -1,5 +1,4 @@
 import subprocess
-import utils.cat_file
 
 
 def cat_file(file_path):
@@ -34,7 +33,7 @@ def get_nuclei(subdomains_file, output_path, resolvers):
         '-no-color',
         '-o', output_path, # writes file
         '-r', resolvers,
-        '-rate-limit', 150, # default = 150
+        '-rate-limit', '150', # default = 150
         '-silent',
     ]
     

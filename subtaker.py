@@ -109,7 +109,7 @@ try:
     subprocess.run(['wget', 'https://raw.githubusercontent.com/janmasarik/resolvers/master/resolvers.txt',
         '-P', get_resolvers_dir()])
 
-    modules.utils.screen_msg("updated resolvers file successfully")
+    modules.utils.screen_msg("updated DNS resolvers file successfully")
 except Exception:
     modules.utils.screen_msg(f"resolvers file could not be updated at {get_resolvers_dir()}")
 
@@ -130,7 +130,7 @@ grep_domains_list = []
 
 with open(args.f, 'r') as domain_file:
     for domain in domain_file:
-        grep_domains_list.append(domain)
+        grep_domains_list.append(domain.strip('\n'))
     
 # Removing main domains that are redundant for grep
 grep_domains_list = modules.subsort.del_list_subds_redund(grep_domains_list)
@@ -144,8 +144,8 @@ subdomains_list = []
 
 if args.amass_enum:
     for domain in grep_domains_list:
-        modules.utils.screen_msg('Executing: amass enum --passive -d')
-        subdomains_list.extend(list(unique_everseen(modules.amass_enum(domain))))
+        modules.utils.screen_msg(f'Executing: amass enum --passive -d {domain}')
+        subdomains_list.extend(list(unique_everseen(modules.amass_enum.run_amass_enum(domain))))
 
     subdomains_list = list(unique_everseen(subdomains_list))
 
@@ -174,7 +174,7 @@ if args.brute:
     
     brute_list = []
 
-    modules.utils.screen_msg(f'Subdomain brute-forcing using wordlist file: {args.brute}')
+    modules.utils.screen_msg(f'Subdomain brute-forcing using wordlist at: {args.brute}')
     
     with open(args.brute, 'r') as brute_file:
         for line in brute_file:
@@ -184,10 +184,10 @@ if args.brute:
         subdomains_list = modules.utils.merge_lists(subdomains_list, brute_list)
         
         del brute_list
-                
+
 
 #! Massdns: resolve subdomains
-
+print()
 modules.utils.screen_msg(f'Starting MassDNS on {len(subdomains_list):,d} possible subdomains'
     + f' with {args.concurrent:,d} concurrent DNS lookups.')
 
@@ -198,7 +198,7 @@ massdns_txt_subds_outpf = f'{args.out_dir}{ftimestamp}-massdns-subds.txt'
 
 
 # Exec massdns and dump results on output file
-utils.massdns_dump(subdomains_list, resolvers_f, args.concurrent, massdns_ndjson_outpf)
+modules.massdns.massdns_dump(subdomains_list, resolvers_f, args.concurrent, massdns_ndjson_outpf)
 
 del subdomains_list
 
@@ -212,17 +212,16 @@ modules.utils.append_list_file(massdns_txt_subds_l, massdns_txt_subds_outpf)
 # Stats
 line_count = modules.utils.count_lines(massdns_ndjson_outpf)
 
-cname_count = subprocess.run(['grep', '-c', 'CNAME', massdns_ndjson_output_file],
+cname_count = subprocess.run(['grep', '-c', 'CNAME', massdns_ndjson_outpf],
     capture_output=True)
 
-mx_count = subprocess.run(['grep', '-c', 'MX', massdns_ndjson_output_file],
+mx_count = subprocess.run(['grep', '-c', 'MX', massdns_ndjson_outpf],
     capture_output=True)
 
 modules.utils.screen_msg('MassDNS finished!\n'
     + f'\t{line_count:,d} total records retrieved\n'
-    + f'\t{cname_count:,d} CNAME records\n'
-    + f'\t{mx_count:,d} MX records')
-
+    + f'\t{int(cname_count.stdout):,d} CNAME records\n'
+    + f'\t{int(mx_count.stdout):,d} MX records')
 
 #! Takeover: 
     # Httprobe requests subdomains list and returns urls

@@ -2,16 +2,7 @@ import json
 import ndjson
 import os
 import subprocess
-
-
-def _exec_and_readlines(cmd, domains):
-    '''Executes a command, having a list of domains or subdomains as argument'''
-
-    domains_str = bytes('\n'.join(domains), 'ascii')
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.PIPE)
-    stdout, stderr = proc.communicate(input=domains_str)
-
-    return [j.decode('utf-8').strip() for j in stdout.splitlines() if j != b'\n']
+import modules.utils
 
 
 def get_massdns(subdomains_l, resolvers_f, concurrent_n):
@@ -35,7 +26,8 @@ def get_massdns(subdomains_l, resolvers_f, concurrent_n):
     # --flush: Forces the data to be written out whenever a response is received.
 
     processed = []
-    for line in _exec_and_readlines(massdns_cmd, subdomains_l):
+    
+    for line in modules.utils.exec_and_readlines(massdns_cmd, subdomains_l):
         if not line:
             continue
         processed.append(json.loads(line.strip()))
