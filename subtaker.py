@@ -166,6 +166,15 @@ if args.fdns:
     
     subdomains_list = modules.utils.merge_lists(subdomains_list, fdns_output)
     
+    #!TODO BEGIN DEL TEST
+    from datetime import datetime
+    base_dir = f'/tmp/'
+    ftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
+    test_file = f'{base_dir}{ftimestamp}-test_fdns_output-append_list'
+    with open(test_file, 'a') as f:
+        for item in fdns_output:
+            f.write(item + '\n')
+    #!TODO END DEL TEST
     del fdns_output
 
 
@@ -183,6 +192,15 @@ if args.brute:
         
         subdomains_list = modules.utils.merge_lists(subdomains_list, brute_list)
         
+        #!TODO BEGIN DEL TEST
+        from datetime import datetime
+        base_dir = f'/tmp/'
+        ftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
+        test_file = f'{base_dir}{ftimestamp}-test_brute_list-append_list'
+        with open(test_file, 'a') as f:
+            for item in brute_list:
+                f.write(item + '\n')
+        #!TODO END DEL TEST
         del brute_list
 
 
@@ -200,6 +218,15 @@ massdns_txt_subds_outpf = f'{args.out_dir}{ftimestamp}-massdns-subds.txt'
 # Exec massdns and dump results on output file
 modules.massdns.massdns_dump(subdomains_list, resolvers_f, args.concurrent, massdns_ndjson_outpf)
 
+#!TODO BEGIN DEL TEST
+from datetime import datetime
+base_dir = f'/tmp/'
+ftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
+test_file = f'{base_dir}{ftimestamp}-test_subdomains_list-append_list'
+with open(test_file, 'a') as f:
+    for item in subdomains_list:
+        f.write(item + '\n')
+#!TODO END DEL TEST
 del subdomains_list
 
 # Writing massdns simplified subdomains txt file

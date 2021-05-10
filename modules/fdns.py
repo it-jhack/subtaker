@@ -1,3 +1,4 @@
+
 import subprocess
 import modules.utils
 from more_itertools import unique_everseen
@@ -49,8 +50,30 @@ def grep_subds_fdns(domains_list, fdns_file):
 
     fdns_outp_list = []
     grep_list, jq_regex_list = _grep_jq_convert(domains_list)
+
+    #!TODO BEGIN DEL TEST
+    print('\n> testing if list items/order is correct:\n')
+    for item in grep_list: #test if list items/order is correct
+        print(item)
+    print()
+    for item in jq_regex_list:
+        print(item)
+    print()
+    for grep_item, jq_item in zip(grep_list, jq_regex_list):
+        print(grep_item + ', ' + jq_item)
+    print()
+    from datetime import datetime
+    base_dir = f'/tmp/'
+    ftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
+    test_file = f'{base_dir}{ftimestamp}-test_grep_subds_fdns-zip_grep_and_jq_items-append_lists'
+    #!TODO END DEL TEST
     
     for grep_item, jq_item in zip(grep_list, jq_regex_list):
+        #!TODO BEGIN DEL TEST
+        with open(test_file, 'a') as f:
+            f.write(grep_item + ',' + jq_item + '\n')
+        #!TODO END DEL TEST
+
 
         jq_filter = f'\'if (.name | test("{jq_item}")) then .name elif (.value | test("{jq_item}")) then .value else empty end\''
 
@@ -63,6 +86,11 @@ def grep_subds_fdns(domains_list, fdns_file):
 
         fdns_outp_list.extend(p.stdout.split('\n'))
 
+        #!TODO BEGIN DEL TEST
+        for item in fdns_outp_list:
+            print(item)
+        #!TODO END DEL TEST
+
     # Removing duplicated results
     fdns_outp_list = list(unique_everseen(fdns_outp_list))
     
@@ -70,4 +98,13 @@ def grep_subds_fdns(domains_list, fdns_file):
     if '' in fdns_outp_list:
         fdns_outp_list.remove('')
 
+    #!TODO BEGIN DEL TEST
+    from datetime import datetime
+    base_dir = f'/tmp/'
+    ftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
+    test_file = f'{base_dir}{ftimestamp}-test_grep_subds_fdns-fdns_outp_list-append_list'
+    with open(test_file, 'a') as f:
+        for item in fdns_outp_list:
+            f.write(item + '\n')
+    #!TODO END DEL TEST
     return fdns_outp_list
