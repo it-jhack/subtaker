@@ -52,7 +52,7 @@ parser.add_argument('--brute', type=str, metavar='<file>',
 
 parser.add_argument('--concurrent', type=int, metavar='<number>', default=10000, help='Number of concurrent DNS lookups. Default is 10,000. Usage: --concurrent 5000')
 
-#TODO parser.add_argument('--rdns', type=str, metavar='', help='Reverse DNS') #TODO Reverse DNS query
+#TODO parser.add_argument('--rdns', type=str, metavar='', help='Reverse DNS')
 
 
 args = parser.parse_args()
@@ -166,23 +166,9 @@ if args.fdns:
         + f'{len(fdns_output):,d}'
         + ' found on .json.gz file.')
     
-    print()#TODO DEL
-    print(f'len(subdomains_list) == {len(subdomains_list):,d}')#TODO DEL
-    print(f'len(fdns_output) == {len(fdns_output):,d}')#TODO DEL
-    subdomains_list = modules.utils.merge_lists(subdomains_list, fdns_output)
-    print(f'subdomains_list = modules.utils.merge_lists(subdomains_list, fdns_output)')#TODO DEL
-    print(f'len(subdomains_list) == {len(subdomains_list):,d}')#TODO DEL
-    print(f'len(fdns_output) == {len(fdns_output):,d}')#TODO DEL
     
-    #!TODO BEGIN DEL TEST
-    from datetime import datetime
-    base_dir = f'/tmp/'
-    testftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
-    test_file = f'{base_dir}{testftimestamp}-test_fdns_output-append_list'
-    with open(test_file, 'a') as f:
-        for item in fdns_output:
-            f.write(item + '\n')
-    #!TODO END DEL TEST
+    subdomains_list = modules.utils.merge_lists(subdomains_list, fdns_output)
+    
     del fdns_output
 
 
@@ -198,24 +184,9 @@ if args.brute:
                 brute_sublist.append(line.strip('\n') + '.' + domain)
         subdomains_list.extend(brute_sublist)
         
-    print(f'len(subdomains_list == {len(subdomains_list):,d}')#TODO DEL
     subdomains_list = list(unique_everseen(subdomains_list))
-    print('subdomains_list = list(unique_everseen(subdomains_list))')#TODO DEL
-    print(f'len(subdomains_list == {len(subdomains_list):,d}')#TODO DEL
+    
     del brute_sublist
-
-        # subdomains_list = modules.utils.merge_lists(subdomains_list, brute_list) #TODO DEL
-        
-        #!TODO BEGIN DEL TEST
-        # from datetime import datetime
-        # base_dir = f'/tmp/'
-        # testftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
-        # test_file = f'{base_dir}{testftimestamp}-test_brute_list-append_list'
-        # with open(test_file, 'a') as f:
-        #     for item in brute_list:
-        #         f.write(item + '\n')
-        #!TODO END DEL TEST
-        # del brute_list
 
 
 #! Massdns: resolve subdomains
@@ -232,15 +203,7 @@ massdns_txt_subds_outpf = f'{args.out_dir}{ftimestamp}-massdns-subds.txt'
 # Exec massdns and dump results on output file
 modules.massdns.massdns_dump(subdomains_list, resolvers_f, args.concurrent, massdns_ndjson_outpf)
 
-#!TODO BEGIN DEL TEST
-from datetime import datetime
-base_dir = f'/tmp/'
-testftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
-test_file = f'{base_dir}{testftimestamp}-test_subdomains_list-append_list'
-with open(test_file, 'a') as f:
-    for item in subdomains_list:
-        f.write(item + '\n')
-#!TODO END DEL TEST
+# Clear mem
 del subdomains_list
 
 # Writing massdns simplified subdomains txt file

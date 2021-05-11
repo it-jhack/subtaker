@@ -56,15 +56,7 @@ def subds_occurrence_logic_check(subds_list):
     # returning elements in alphabetical order.
     sorted_optimized_list = []
     sorted_optimized_list.extend(sorted(optimized_list, key=len))
-    #!TODO BEGIN DEL TEST
-    from datetime import datetime
-    base_dir = f'/tmp/'
-    ftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
-    test_file = f'{base_dir}{ftimestamp}-test_subsort-sorted_optimized_list-append_list'
-    with open(test_file, 'a') as f:
-        for item in sorted_optimized_list:
-            f.write(item + '\n')
-    #!TODO END DEL TEST
+    
     return sorted_optimized_list
 
 

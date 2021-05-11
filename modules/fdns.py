@@ -15,7 +15,6 @@ def _grep_jq_convert(domain):
     output: '.example.com' (for grep)
             '\\.example\\.com' (for jq)'''
     
-
     domain = domain.strip()
     sliced_domain = domain.split('.')
 
@@ -57,11 +56,6 @@ def grep_subd_fdns(domain, fdns_file):
 
     fdns_outp_list.extend(p.stdout.split('\n'))
 
-    #!TODO BEGIN DEL TEST
-    for item in fdns_outp_list:
-        print(item)
-    #!TODO END DEL TEST
-
     # Removing eventual duplicated results
     fdns_outp_list = list(unique_everseen(fdns_outp_list))
     
@@ -69,13 +63,4 @@ def grep_subd_fdns(domain, fdns_file):
     if '' in fdns_outp_list:
         fdns_outp_list.remove('')
 
-    #!TODO BEGIN DEL TEST
-    from datetime import datetime
-    base_dir = f'/tmp/'
-    ftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
-    test_file = f'{base_dir}{ftimestamp}-test_grep_subd_fdns-fdns_outp_list-append_list{domain}'
-    with open(test_file, 'a') as f:
-        for item in fdns_outp_list:
-            f.write(item + '\n')
-    #!TODO END DEL TEST
     return fdns_outp_list

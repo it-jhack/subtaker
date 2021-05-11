@@ -5,18 +5,6 @@ import subprocess
 import modules.utils
 
 
-#!TODO BEGIN DEL IF utils.exec_and_readlines
-# def _exec_and_readlines(cmd, domains):
-#     '''Executes a command, having a (sub)domains list as argument'''
-
-#     domains_str = bytes('\n'.join(domains), 'ascii')
-#     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.PIPE)
-#     stdout, stderr = proc.communicate(input=domains_str)
-
-#     return [j.decode('utf-8').strip() for j in stdout.splitlines() if j != b'\n']
-#!TODO END DEL IF utils.exec_and_readlines
-
-
 def get_massdns(subdomains_l, resolvers_f, concurrent_n):
     
     massdns_cmd = [
@@ -27,32 +15,14 @@ def get_massdns(subdomains_l, resolvers_f, concurrent_n):
         '-r', resolvers_f,
         '--flush'
     ]
-    # -s: Number of concurrent lookups. (Default: 10000)
-    # -t: Record type to be resolved. (Default: A)
-    # -o: Flags for output formatting:
-        # S - simple text output
-        # F - full text output
-        # B - binary output
-        # J - ndjson output
-    # -r: Text file containing DNS resolvers.
-    # --flush: Forces the data to be written out whenever a response is received.
 
     processed = []
-    # for line in _exec_and_readlines(massdns_cmd, subdomains_l): #!TODO BEGIN DEL THIS LINE
-    for line in modules.utils.exec_and_readlines(massdns_cmd, subdomains_l): #!TODO END DEL OR THIS LINE
+    
+    for line in modules.utils.exec_and_readlines(massdns_cmd, subdomains_l):
         if not line:
             continue
         processed.append(json.loads(line.strip()))
     
-    #!TODO BEGIN DEL TEST
-    from datetime import datetime
-    base_dir = f'/tmp/'
-    ftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
-    test_file = f'{base_dir}{ftimestamp}-test_get_massdns-processed-write'
-    with open(test_file, 'w') as f:
-        for item in processed:
-            f.write(str(item) + '\n')
-    #!TODO END DEL TEST
     return processed
 
 
@@ -94,15 +64,8 @@ def grep_subds_ndjson(file_path):
         results_list.remove('') 
 
     # Each item in results_list finishes with '.' char;
+    
     # You may or may not want to remove that char,
-    # depending on what you'll do with the list
-    #!TODO BEGIN DEL TEST
-    from datetime import datetime
-    base_dir = f'/tmp/'
-    ftimestamp = datetime.now().strftime('%y%m%d-%H%M%S')
-    test_file = f'{base_dir}{ftimestamp}-test_massdns-grep_subds_ndjson-results_list-append_item'
-    with open(test_file, 'a') as f:
-        for item in results_list:
-                f.write(item + '\n')
-    #!TODO END DEL TEST
+        # depending on what you'll do with the list
+    
     return results_list
