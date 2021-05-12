@@ -1,5 +1,6 @@
 
-# LEGAL WARNING: DO NOT USE THIS TOOL ON WEBSITES YOU DON'T HAVE PERMISSION.
+# LEGAL WARNING: DO NOT USE THIS TOOL ON ASSETS YOU DON'T HAVE PERMISSION.
+# PROCEED AT YOUR OWN RESPONSIBILITY!
 
 # I created this project with the objective to learn python, OO, networking, and 
 # ethical hacking, simultaneously.
@@ -10,7 +11,7 @@
 # Also, big thanks to Patrik Hudak, as this project had a lot of contribution from 
 # his website and master's thesis.
 
-# I encourage anyone interested in leraning about subdomain takeover vulnerabilities
+# I encourage anyone interested in learning about subdomain takeover vulnerabilities
 # to check his posts: https://0xpatrik.com/
 
 
@@ -38,8 +39,9 @@ parser.add_argument('-f', type=str, metavar='<file>',
 
 # Getting working directory as default for report output path
 argparse_default_o = subprocess.run(['pwd'], capture_output=True, text=True).stdout.strip()
+
 parser.add_argument('--out-dir', type=str, metavar='<dir_path>', default=argparse_default_o,
-    help='Directory base path to output report files. Usage: -o /path/to/dir/')
+    help='Directory base path to output report files. If not provided, default output dir will be same as \'pwd\' command. Usage: --out-dir /path/to/dir/')
 
 parser.add_argument('--amass-enum', action='store_true',
     help='Do subdomain enumeration with amass')
@@ -48,7 +50,7 @@ parser.add_argument('--fdns', type=str, metavar='<file.json.gz>',
     help='Path to the file containing Forward DNS data (do NOT extract the file). See \'opendata.rapid7.com\'. Usage: --fdns cname_file.json.gz')
 
 parser.add_argument('--brute', type=str, metavar='<file>',
-    help='Bruteforce subdomains. Usage: -b wordlist.txt')
+    help='Bruteforce subdomains. Usage: --brute wordlist.txt')
 
 parser.add_argument('--concurrent', type=int, metavar='<number>', default=10000, help='Number of concurrent DNS lookups. Default is 10,000. Usage: --concurrent 5000')
 
@@ -79,19 +81,20 @@ def get_resolvers_fpath():
 
 # Cewl h4x0r b4nn3r :]
 print('''
-███████╗██╗   ██╗██████╗ ████████╗ █████╗ ██╗  ██╗███████╗██████╗ 
-██╔════╝██║   ██║██╔══██╗╚══██╔══╝██╔══██╗██║ ██╔╝██╔════╝██╔══██╗
-███████╗██║   ██║██████╔╝   ██║   ███████║█████╔╝ █████╗  ██████╔╝
-╚════██║██║   ██║██╔══██╗   ██║   ██╔══██║██╔═██╗ ██╔══╝  ██╔══██╗
-███████║╚██████╔╝██████╔╝   ██║   ██║  ██║██║  ██╗███████╗██║  ██║
-╚══════╝ ╚═════╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
-  _               _ _          _ _                _    
- | |             (_) |        (_) |              | |   
- | |__  _   _     _| |_  ____  _| |__   __ _  ___| | __
- | '_ \| | | |   | | __||____|| | '_ \ / _` |/ __| |/ /
- | |_) | |_| |   | | |_       | | | | | (_| | (__|   < 
- |_.__/ \__, |   |_|\__|     _| |_| |_|\__,_|\___|_|\_\ 
-        |___/               |___/                      
+ ███████╗██╗   ██╗██████╗ ████████╗ █████╗ ██╗  ██╗███████╗██████╗ 
+ ██╔════╝██║   ██║██╔══██╗╚══██╔══╝██╔══██╗██║ ██╔╝██╔════╝██╔══██╗
+ ███████╗██║   ██║██████╔╝   ██║   ███████║█████╔╝ █████╗  ██████╔╝
+ ╚════██║██║   ██║██╔══██╗   ██║   ██╔══██║██╔═██╗ ██╔══╝  ██╔══██╗
+ ███████║╚██████╔╝██████╔╝   ██║   ██║  ██║██║  ██╗███████╗██║  ██║
+ ╚══════╝ ╚═════╝ ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+                                          A Subdomain Takeover Tool
+   _               _ _          _ _                _    
+  | |             (_) |        (_) |              | |   
+  | |__  _   _     _| |_  ____  _| |__   __ _  ___| | __
+  | '_ \| | | |   | | __||____|| | '_ \ / _` |/ __| |/ /
+  | |_) | |_| |   | | |_       | | | | | (_| | (__|   < 
+  |_.__/ \__, |   |_|\__|     _| |_| |_|\__,_|\___|_|\_\ 
+         |___/               |___/                      
 ''')
 
 print("\nLEGAL WARNING:\tDO NOT USE THIS TOOL ON ASSETS YOU DON'T HAVE PERMISSION!\n"
