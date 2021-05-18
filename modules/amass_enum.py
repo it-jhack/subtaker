@@ -5,13 +5,17 @@ from more_itertools import unique_everseen
 
 # Use Amass to get passive data
 
-def run_amass_enum(domain):
+def run_amass_enum(domain, *args):
     amass_cmd = [
-        'amass', 
+        'amass',
         'enum',
         '--passive',
         '-d', domain
     ]
+    
+    if args:
+        amass_cmd.extend(args)
+
     output_list = []
     for line in modules.utils.exec_and_readlines(amass_cmd, domain):
         if not line:

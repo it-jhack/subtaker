@@ -75,13 +75,14 @@ After entering the command above, you need to restart your console or enter `sou
 | -f <file> | List domains in a '.txt' file. Each domain must be in a different line. Do not include 'http://' or 'https://'. Usage: -f domains.txt |
 | --out-dir <dir_path> | Directory base path to output report files. If not provided, default output dir will be same as 'pwd' command. Usage: --out-dir /path/to/dir/ |
 | --amass-enum | Do subdomain enumeration with amass |
+| --amass-config <config_file> | Path to Amass .ini configuration file. Usage: --amass-config /path/config.ini |
 | --fdns <file.json.gz> | Path to the file containing Forward DNS data (do NOT extract the file). See 'opendata.rapid7.com'. Usage: --fdns cname_file.json.gz |
 | --brute <file> | Bruteforce subdomains. Usage: --brute wordlist.txt |
 | --concurrent <number> | Number of concurrent DNS lookups. Default is 10,000. Usage: --concurrent 5000|
 
 Example using all options:
 ```bash
-python3 subtaker.py -f path/main_domains.txt --out-dir /outp/dir/ --amass-enum --brute /path/wordlist.txt --concurrent 15000 --fdns /path/2021-05-08-1620432305-fdns_cname.json.gz
+python3 subtaker.py -f path/main_domains.txt --out-dir /outp/dir/ --amass-enum --amass-config /path/config.ini --brute /path/wordlist.txt --concurrent 15000 --fdns /path/2021-05-08-1620432305-fdns_cname.json.gz
 ```
 
 > Note that the -f file should contain domains, NOT urls.

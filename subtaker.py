@@ -46,6 +46,9 @@ parser.add_argument('--out-dir', type=str, metavar='<dir_path>', default=argpars
 parser.add_argument('--amass-enum', action='store_true',
     help='Do subdomain enumeration with amass')
 
+parser.add_argument('--amass-config', type=str, metavar='<config_file>',
+    help='Path to Amass .ini configuration file. Usage: --amass-config /path/config.ini')
+
 parser.add_argument('--fdns', type=str, metavar='<file.json.gz>',
     help='Path to the file containing Forward DNS data (do NOT extract the file). See \'opendata.rapid7.com\'. Usage: --fdns cname_file.json.gz')
 
@@ -143,9 +146,14 @@ subdomains_list = []
 #! Use Amass to get passive data on each domain
 
 if args.amass_enum:
-    for domain in grep_domains_list:
-        modules.utils.screen_msg(f'Executing: amass enum --passive -d {domain}')
-        subdomains_list.extend(list(unique_everseen(modules.amass_enum.run_amass_enum(domain))))
+    if args.amass_config:
+        for domain in grep_domains_list:
+            modules.utils.screen_msg(f'Executing: amass enum --passive -d {domain} --config {args.amass_config}')
+            subdomains_list.extend(list(unique_everseen(modules.amass_enum.run_amass_enum(domain, args.amass_config))))
+    else:
+        for domain in grep_domains_list:
+            modules.utils.screen_msg(f'Executing: amass enum --passive -d {domain}')
+            subdomains_list.extend(list(unique_everseen(modules.amass_enum.run_amass_enum(domain))))
 
     subdomains_list = list(unique_everseen(subdomains_list))
     print()
